@@ -2698,37 +2698,59 @@ function positionRowControls(row){
 
 // An unlinked row in SYNC mode already gets squeezed/stretched in TIME to
 // fill exactly one shared bar (see the sync lane in seqScheduler) -- this
-// makes the grid match that visually too: each of the row's own beat-groups
-// is drawn at the SAME pixel width as the corresponding shared beat-group,
-// packed with however many of its own (narrower or wider) cells that group
-// currently holds, so a 5-in-4 row visibly shares the same four bar columns
-// as everything else instead of just running wider or narrower overall.
+// makes the grid match that visually too. Two levels of alignment,
+// depending on whether the row's own beat count still matches the shared
+// structure's:
+//   - Same beat count (the normal case, right after unlinking): align
+//     bar-for-bar -- each of the row's own beat-groups is drawn at the
+//     SAME pixel width as the correspondingly-indexed shared beat-group,
+//     so a 5-in-4 beat visibly shares that one bar column with everything
+//     else instead of just making the whole row run wider.
+//   - Different beat count (Beats/measure was changed after this row went
+//     independent -- global groupSlots changes deliberately never touch an
+//     unlinked row's own groupSlots, so the counts can drift apart): fall
+//     back to matching the row's TOTAL width to the shared structure's
+//     TOTAL width, split evenly across its own cells. That's all SYNC
+//     playback actually keys off anyway (rowSteps(row) squeezed into one
+//     shared bar's total duration, with no awareness of either side's
+//     internal beat-group boundaries) -- so the row stays visibly aligned
+//     instead of collapsing back to plain uniform cells, and nothing about
+//     the row's own configuration (its groupSlots, mode, pattern) is ever
+//     touched here to get it.
 // Pure arithmetic against the current zoom level, no DOM measurement needed
 // (unlike the position*Controls functions above), so it's safe to call any
-// time the grid, a row's groupSlots, or the zoom level changes. Only kicks
-// in when the row's own group count still matches the shared structure's --
-// the normal case, since nothing in the UI lets an unlinked row's group
-// count drift away from what it had when it unlinked.
+// time the grid, a row's groupSlots, or the zoom level changes.
 function applySyncRowCellWidths(){
   const cellPx=Math.round(SEQ_BASE_CELL*seqZoom);
   const gapPx=Math.max(2, Math.round(SEQ_BASE_GAP*seqZoom));
+  const groupGapPx=Math.max(3, Math.round(SEQ_BASE_GROUP_GAP*seqZoom));
   seq.rows.forEach(row=>{
     const firstStep=document.querySelector('.step[data-row="'+row.id+'"]');
     const cellsEl=firstStep ? firstStep.closest('.seq-cells') : null;
     if(!cellsEl) return;
-    const aligned=rowIsUnlinked(row) && rowMode(row)==='sync' && row.groupSlots.length===seq.groupSlots.length;
-    if(!aligned){
+    if(!(rowIsUnlinked(row) && rowMode(row)==='sync')){
       cellsEl.style.gridTemplateColumns='';
       Array.from(cellsEl.children).forEach(el=>{ el.style.width=''; });
       return;
     }
-    const widths=[];
-    seq.groupSlots.forEach((globalCount, g)=>{
-      const rowCount=row.groupSlots[g];
-      const targetPx=globalCount*cellPx+(globalCount-1)*gapPx;
-      const perCell=Math.max(6, (targetPx-(rowCount-1)*gapPx)/rowCount);
-      for(let i=0;i<rowCount;i++) widths.push(perCell);
-    });
+    let widths;
+    if(row.groupSlots.length===seq.groupSlots.length){
+      widths=[];
+      seq.groupSlots.forEach((globalCount, g)=>{
+        const rowCount=row.groupSlots[g];
+        const targetPx=globalCount*cellPx+(globalCount-1)*gapPx;
+        const perCell=Math.max(6, (targetPx-(rowCount-1)*gapPx)/rowCount);
+        for(let i=0;i<rowCount;i++) widths.push(perCell);
+      });
+    }else{
+      const globalSteps=seq.groupSlots.reduce((a,b)=>a+b, 0);
+      const globalGroups=seq.groupSlots.length;
+      const targetTotalPx=globalSteps*cellPx+(globalSteps-1)*gapPx+Math.max(0, globalGroups-1)*groupGapPx;
+      const totalSteps=row.groupSlots.reduce((a,b)=>a+b, 0);
+      const rowGroups=row.groupSlots.length;
+      const perCell=Math.max(6, (targetTotalPx-(totalSteps-1)*gapPx-Math.max(0, rowGroups-1)*groupGapPx)/totalSteps);
+      widths=new Array(totalSteps).fill(perCell);
+    }
     cellsEl.style.gridTemplateColumns=widths.map(w=> w.toFixed(2)+'px').join(' ');
     Array.from(cellsEl.children).forEach((el,i)=>{ el.style.width=(widths[i]!=null?widths[i]:cellPx)+'px'; });
   });
