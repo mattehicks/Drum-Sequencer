@@ -331,6 +331,20 @@ canvas{
 }
 .seq-tempo input{width:120px;}
 .seq-tempo output{color:var(--text); min-width:56px; display:inline-block;}
+.seq-step-res{
+  display:flex; align-items:center; gap:8px;
+  font-size:12px; color:var(--subtext);
+  font-family:var(--mono);
+}
+.seq-step-res select{
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--text);
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:3px 6px;
+}
 .seq-body{overflow-x:auto; padding-bottom:2px; position:relative;}
 .seq-row{
   display:flex;
@@ -1170,6 +1184,13 @@ canvas{
         <input type="range" id="seqTempo" min="60" max="200" step="1" value="112">
         <output id="seqTempoOut">112 BPM</output>
       </label>
+      <label class="seq-step-res" title="How much real time one step/cell represents -- doesn't change the grid, just how fast it plays">Step
+        <select id="seqStepRes">
+          <option value="2">1/8</option>
+          <option value="4" selected>1/16</option>
+          <option value="8">1/32</option>
+        </select>
+      </label>
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
       <div class="seq-ctrl-group">
         <span class="seq-beats-label">Beats / measure</span>
@@ -1961,6 +1982,11 @@ let SEQ_STEPS=16;
 
 const seq={
   bpm:112,
+  // Steps per quarter-note beat -- 4 is a 16th note (the long-standing
+  // default), 8 is a 32nd note (twice as fast, same step count), 2 is an
+  // 8th note. Purely a timing knob: it doesn't touch groupSlots or step
+  // count, just how much real time one step represents at the current BPM.
+  stepDivision:4,
   beatsPerMeasure:4,
   groupSlots:[4,4,4,4],
   playing:false,
@@ -1995,8 +2021,10 @@ let seqTimerId=null;
 const SEQ_LOOKAHEAD_MS=25;
 const SEQ_SCHEDULE_AHEAD=0.12;
 
-const SLOT_UNIT_DIVISIONS=4; // one slot = a 16th note at the given BPM, fixed regardless of grouping
-function seqSecondsPerStep(){ return 60/seq.bpm/SLOT_UNIT_DIVISIONS; }
+// One step's duration in seconds, at the current BPM and step resolution
+// (seq.stepDivision -- steps per quarter-note beat: 4=16th, 8=32nd, 2=8th).
+// Independent of groupSlots, which only controls visual beat grouping.
+function seqSecondsPerStep(){ return 60/seq.bpm/(seq.stepDivision||4); }
 
 function seqGroupBoundaries(groupSlots){
   const bounds=[]; let acc=0;
@@ -3006,12 +3034,19 @@ function applySyncRowCellWidths(){
 const seqPlayBtn=document.getElementById('seqPlayBtn');
 const seqTempoInput=document.getElementById('seqTempo');
 const seqTempoOut=document.getElementById('seqTempoOut');
+const seqStepResInput=document.getElementById('seqStepRes');
 const seqClearBtn=document.getElementById('seqClearBtn');
 
 seqPlayBtn.addEventListener('click', ()=>{ seq.playing ? seqStop() : seqStart(); });
 seqTempoInput.addEventListener('input', ()=>{
   seq.bpm=parseFloat(seqTempoInput.value);
   seqTempoOut.textContent=seq.bpm+' BPM';
+});
+// Changes how fast the existing steps play (seqSecondsPerStep), not the
+// grid itself -- switching to 1/32 does not add cells, it just makes each
+// already-programmed cell a 32nd note instead of a 16th at the current BPM.
+seqStepResInput.addEventListener('change', ()=>{
+  seq.stepDivision=parseInt(seqStepResInput.value, 10) || 4;
 });
 
 const seqBeatsDec=document.getElementById('seqBeatsDec');
@@ -3978,6 +4013,7 @@ function collectProjectState(){
     masterVolume:parseFloat(masterVolInput.value),
     sequencer:{
       bpm:seq.bpm,
+      stepDivision:seq.stepDivision,
       beatsPerMeasure:seq.beatsPerMeasure,
       groupSlots:seq.groupSlots.slice(),
       rows:seq.rows.map(r=>({
@@ -4136,6 +4172,10 @@ function applyProjectState(data){
 
   const s=data.sequencer||{};
   seq.bpm=typeof s.bpm==='number' ? s.bpm : seq.bpm;
+  // Older save files predate step resolution entirely -- they were always
+  // 16th notes, so that's the correct fallback rather than leaving whatever
+  // resolution happened to be selected before the load.
+  seq.stepDivision=[2,4,8].includes(s.stepDivision) ? s.stepDivision : 4;
   seq.beatsPerMeasure=typeof s.beatsPerMeasure==='number' ? s.beatsPerMeasure : seq.beatsPerMeasure;
   seq.groupSlots=(Array.isArray(s.groupSlots) && s.groupSlots.length) ? s.groupSlots.slice() : seq.groupSlots;
   seq.rows=(Array.isArray(s.rows) && s.rows.length) ? s.rows.map(r=>{
@@ -4180,6 +4220,7 @@ function applyProjectState(data){
 
   seqTempoInput.value=seq.bpm;
   seqTempoOut.textContent=seq.bpm+' BPM';
+  seqStepResInput.value=String(seq.stepDivision);
   renderSequencer();
   updateSeqMeasureUI();
 
