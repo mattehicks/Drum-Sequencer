@@ -6,6 +6,9 @@ this is where synthesis algorithms and tooling get prototyped and learned before
 hardware integration decision is made.
 
 ## base1
+<img width="1102" height="1560" alt="D20 Synth Workbench" src="https://github.com/user-attachments/assets/6b336765-03a3-4cee-bca2-8414162425ed" />
+
+
 
 First snapshot, tagged `base1`. Contents:
 
