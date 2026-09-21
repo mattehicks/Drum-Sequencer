@@ -1184,6 +1184,7 @@ canvas{
         <input type="range" id="seqTempo" min="60" max="200" step="1" value="112">
         <output id="seqTempoOut">112 BPM</output>
       </label>
+      <button id="seqTapTempoBtn" class="seq-clear" type="button" title="Tap in time with the beat (a few taps in a row) to set the tempo">Tap Tempo</button>
       <label class="seq-step-res" title="How much real time one step/cell represents -- doesn't change the grid, just how fast it plays">Step
         <select id="seqStepRes">
           <option value="2">1/8</option>
@@ -3047,6 +3048,39 @@ seqTempoInput.addEventListener('input', ()=>{
 // already-programmed cell a 32nd note instead of a 16th at the current BPM.
 seqStepResInput.addEventListener('change', ()=>{
   seq.stepDivision=parseInt(seqStepResInput.value, 10) || 4;
+});
+
+// Tap Tempo: each click records a timestamp; once there are at least two
+// taps close enough together to be the same run, the BPM is the average of
+// the intervals between them (averaging rather than just using the latest
+// gap smooths out the inevitable timing wobble in a human tap). A pause
+// longer than SEQ_TAP_RESET_MS starts a fresh run instead of blending a
+// new tempo in with stale old taps, and only the most recent
+// SEQ_TAP_MAX_TAPS are kept so the average can still follow a tap-in that
+// drifts faster or slower partway through.
+const SEQ_TAP_RESET_MS=2000;
+const SEQ_TAP_MAX_TAPS=8;
+let seqTapTimes=[];
+const seqTapTempoBtn=document.getElementById('seqTapTempoBtn');
+seqTapTempoBtn.addEventListener('click', ()=>{
+  const now=performance.now();
+  if(seqTapTimes.length && now-seqTapTimes[seqTapTimes.length-1]>SEQ_TAP_RESET_MS){
+    seqTapTimes.length=0;
+  }
+  seqTapTimes.push(now);
+  if(seqTapTimes.length>SEQ_TAP_MAX_TAPS) seqTapTimes.shift();
+  if(seqTapTimes.length<2){
+    showHint('Tap again to set the tempo...');
+    return;
+  }
+  let totalGap=0;
+  for(let i=1;i<seqTapTimes.length;i++) totalGap+=seqTapTimes[i]-seqTapTimes[i-1];
+  const avgGapMs=totalGap/(seqTapTimes.length-1);
+  const bpm=Math.round(Math.min(200, Math.max(60, 60000/avgGapMs)));
+  seq.bpm=bpm;
+  seqTempoInput.value=bpm;
+  seqTempoOut.textContent=bpm+' BPM';
+  showHint('Tempo set to '+bpm+' BPM.');
 });
 
 const seqBeatsDec=document.getElementById('seqBeatsDec');
