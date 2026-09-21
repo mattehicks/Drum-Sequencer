@@ -1,11 +1,11 @@
 {
   "format": "d20-synth-project",
   "version": 1,
-  "savedAt": "2026-09-22T00:15:00.000Z",
+  "savedAt": "2026-09-21T22:16:49.685Z",
   "name": "Hunter (Bjork) - reverse-engineered sample",
-  "masterVolume": 0.3,
+  "masterVolume": 0.54,
   "sequencer": {
-    "bpm": 80,
+    "bpm": 135,
     "stepDivision": 8,
     "beatsPerMeasure": 16,
     "groupSlots": [
@@ -31,7 +31,7 @@
         "id": "row0",
         "voiceId": "kick",
         "unlinked": false,
-        "volume": 100
+        "volume": 58
       },
       {
         "id": "row1",
@@ -566,8 +566,206 @@
     }
   },
   "textPatterns": {
-    "patterns": [],
-    "arrangement": []
+    "patterns": [
+      {
+        "id": "pat0",
+        "label": "A",
+        "pairs": [
+          {
+            "slots": 7,
+            "repeat": 4
+          },
+          {
+            "slots": 2,
+            "repeat": 1
+          },
+          {
+            "slots": 7,
+            "repeat": 4
+          },
+          {
+            "slots": 3,
+            "repeat": 1
+          }
+        ]
+      },
+      {
+        "id": "pat1",
+        "label": "B",
+        "pairs": [
+          {
+            "slots": 4,
+            "repeat": 3
+          },
+          {
+            "slots": 3,
+            "repeat": 2
+          },
+          {
+            "slots": 4,
+            "repeat": 3
+          }
+        ]
+      }
+    ],
+    "arrangement": [
+      "pat0",
+      "pat0",
+      "pat1",
+      "pat0"
+    ]
   },
-  "voices": []
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 150,
+        "endFreq": 50,
+        "pitchDecay": 0.08,
+        "ampDecay": 0.35,
+        "click": 0.4,
+        "drive": 0.15
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "tone1": 190,
+        "tone2": 330,
+        "toneDecay": 0.12,
+        "noiseFreq": 2200,
+        "noiseQ": 1.2,
+        "noiseDecay": 0.18
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Hi-Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "fundamental": 320,
+        "hpFreq": 6000,
+        "decay": 0.09
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Cymbal",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "length": 2.2,
+        "brightness": 600,
+        "pitch": 1
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "centerFreq": 1500,
+        "bursts": 3,
+        "spacing": 0.015,
+        "tailLength": 0.25,
+        "tailDecay": 3,
+        "tailMix": 0.5
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Cowbell",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "freq1": 587,
+        "ratio": 1.48,
+        "q": 6,
+        "decay": 0.4
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 280,
+        "endFreq": 110,
+        "pitchDecay": 0.06,
+        "decay": 0.3,
+        "noiseAmt": 0.2
+      }
+    },
+    {
+      "id": "ks",
+      "name": "KS Pluck",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "frequency": 220,
+        "damping": 0.995
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Chaos Perc",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "centerFreq": 1200,
+        "q": 1.5,
+        "decay": 0.15,
+        "chaosR": 3.97
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click1",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click2",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1
+      }
+    }
+  ]
 }
