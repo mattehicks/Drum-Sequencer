@@ -1780,6 +1780,19 @@ const VOICES=[
   }
 ];
 
+// Pristine name/key/param defaults for the 9 stock voices (Click1/2
+// included), captured once before anything can touch them. Save uses this
+// to skip writing out a stock voice entirely when nothing about it
+// differs from what a brand-new project already has -- there's no reason
+// to persist eleven full instrument definitions when only the kick was
+// ever actually touched.
+const VOICE_DEFAULTS={};
+VOICES.forEach(v=>{
+  const params={};
+  v.params.forEach(p=>{ params[p.id]=p.value; });
+  VOICE_DEFAULTS[v.id]={name:v.name, key:v.key, params};
+});
+
 /* ---------- UI ---------- */
 
 // Builds one voice card. Assumes state.voices[voice.id] is already seeded
@@ -1981,15 +1994,25 @@ let seqRowUid=5; // 0-4 are the built-in starter rows below; new rows continue f
 function seqNewRowId(){ return 'row'+(seqRowUid++); }
 let SEQ_STEPS=16;
 
+// Named so collectProjectState (save) can skip writing a value that
+// matches the default, and applyProjectState (load) can fall back to the
+// exact same default when a field is missing from the file -- rather than
+// leaving whatever the PREVIOUS project happened to have it set to.
+const SEQ_DEFAULT_BPM=112;
+const SEQ_DEFAULT_STEP_DIVISION=4;
+const SEQ_DEFAULT_BEATS_PER_MEASURE=4;
+const SEQ_DEFAULT_GROUP_SLOTS=[4,4,4,4];
+const SEQ_DEFAULT_MASTER_VOLUME=0.2;
+
 const seq={
-  bpm:112,
+  bpm:SEQ_DEFAULT_BPM,
   // Steps per quarter-note beat -- 4 is a 16th note (the long-standing
   // default), 8 is a 32nd note (twice as fast, same step count), 2 is an
   // 8th note. Purely a timing knob: it doesn't touch groupSlots or step
   // count, just how much real time one step represents at the current BPM.
-  stepDivision:4,
-  beatsPerMeasure:4,
-  groupSlots:[4,4,4,4],
+  stepDivision:SEQ_DEFAULT_STEP_DIVISION,
+  beatsPerMeasure:SEQ_DEFAULT_BEATS_PER_MEASURE,
+  groupSlots:SEQ_DEFAULT_GROUP_SLOTS.slice(),
   playing:false,
   rows:[
     {id:'row0', voiceId:'kick'},
@@ -4037,24 +4060,44 @@ masterVolInput.addEventListener('input', ()=>{
 // than trying to serialize a function). Downloads as a timestamped .json
 // file -- there's no server here, so a browser download is the save.
 
+function seqArraysEqual(a, b){
+  return a.length===b.length && a.every((v,i)=> v===b[i]);
+}
+
 function collectProjectState(){
   const rowIds=seq.rows.map(r=>r.id);
   const projectName=document.getElementById('projectNameInput').value.trim();
+  const masterVolume=parseFloat(masterVolInput.value);
+
+  // Only the keys that differ from a brand-new project's own defaults go
+  // in the file -- an untouched Tempo slider, a collapsed panel that was
+  // never opened, or a stock instrument nobody dragged a knob on doesn't
+  // need to be written out just because collectProjectState technically
+  // knows its value. Every omitted key has a matching hard default on the
+  // load side (applyProjectState), so leaving it out is never ambiguous
+  // with "load whatever this project happened to have before".
+  const uiState={};
+  if(seqZoom!==1) uiState.zoom=seqZoom;
+  if(seqBarsHidden) uiState.barsHidden=true;
+  if(seqMuteSoloShown) uiState.muteSoloShown=true;
+  if(analysisExpanded) uiState.analysisExpanded=true;
+  if(!patternsExpanded) uiState.patternsExpanded=false;
+
   return {
     format:'d20-synth-project',
     version:1,
     savedAt:new Date().toISOString(),
     name:projectName || undefined,
-    masterVolume:parseFloat(masterVolInput.value),
+    masterVolume:masterVolume!==SEQ_DEFAULT_MASTER_VOLUME ? masterVolume : undefined,
     sequencer:{
-      bpm:seq.bpm,
-      stepDivision:seq.stepDivision,
-      beatsPerMeasure:seq.beatsPerMeasure,
-      groupSlots:seq.groupSlots.slice(),
+      bpm:seq.bpm!==SEQ_DEFAULT_BPM ? seq.bpm : undefined,
+      stepDivision:seq.stepDivision!==SEQ_DEFAULT_STEP_DIVISION ? seq.stepDivision : undefined,
+      beatsPerMeasure:seq.beatsPerMeasure!==SEQ_DEFAULT_BEATS_PER_MEASURE ? seq.beatsPerMeasure : undefined,
+      groupSlots:seqArraysEqual(seq.groupSlots, SEQ_DEFAULT_GROUP_SLOTS) ? undefined : seq.groupSlots.slice(),
       rows:seq.rows.map(r=>({
         id:r.id,
         voiceId:r.voiceId,
-        unlinked:!!r.unlinked,
+        unlinked:r.unlinked ? true : undefined,
         groupSlots:r.unlinked ? r.groupSlots.slice() : undefined,
         mode:r.unlinked ? (r.mode||'loop') : undefined,
         volume:r.volume!=null ? r.volume : undefined,
@@ -4068,18 +4111,22 @@ function collectProjectState(){
       patterns:patternLib.patterns.map(p=>({id:p.id, label:p.label, pairs:p.pairs.map(pr=>({slots:pr.slots, repeat:pr.repeat}))})),
       arrangement:patternLib.arrangement.slice()
     },
-    // View-only prefs (zoom, which strips/panels are open) -- none of this
-    // touches seq/pattern data, but a project built at a comfortable zoom
-    // with the bars strip tucked away should reopen looking exactly like
-    // that, not reset back to Claude's own defaults every time.
-    uiState:{
-      zoom:seqZoom,
-      barsHidden:seqBarsHidden,
-      muteSoloShown:seqMuteSoloShown,
-      analysisExpanded:analysisExpanded,
-      patternsExpanded:patternsExpanded
-    },
-    voices:VOICES.map(v=>({
+    // View-only prefs (zoom, which strips/panels are open). Omitted
+    // entirely when every one of them is still at its default -- see the
+    // uiState build-up above.
+    uiState:Object.keys(uiState).length ? uiState : undefined,
+    // A stock voice (not a clone) is only written out if its name, key, or
+    // any param value actually differs from VOICE_DEFAULTS -- an
+    // instrument nobody touched doesn't need its full param set persisted.
+    // A clone is always written: its existence at all is the customization.
+    voices:VOICES.filter(v=>{
+      if(v.isClone) return true;
+      const def=VOICE_DEFAULTS[v.id];
+      if(!def) return true; // no known default (shouldn't happen) -- save it rather than risk losing it
+      if(v.name!==def.name || v.key!==def.key) return true;
+      const cur=state.voices[v.id]||{};
+      return Object.keys(def.params).some(pid=> cur[pid]!==def.params[pid]);
+    }).map(v=>({
       id:v.id,
       name:v.name,
       key:v.key,
@@ -4217,13 +4264,14 @@ function applyProjectState(data){
   applyVoicesState(Array.isArray(data.voices) ? data.voices : []);
 
   const s=data.sequencer||{};
-  seq.bpm=typeof s.bpm==='number' ? s.bpm : seq.bpm;
-  // Older save files predate step resolution entirely -- they were always
-  // 16th notes, so that's the correct fallback rather than leaving whatever
-  // resolution happened to be selected before the load.
-  seq.stepDivision=[2,4,8].includes(s.stepDivision) ? s.stepDivision : 4;
-  seq.beatsPerMeasure=typeof s.beatsPerMeasure==='number' ? s.beatsPerMeasure : seq.beatsPerMeasure;
-  seq.groupSlots=(Array.isArray(s.groupSlots) && s.groupSlots.length) ? s.groupSlots.slice() : seq.groupSlots;
+  // Save now omits any of these that matched their default (see
+  // collectProjectState), so a missing field means "this project's value
+  // WAS the default" -- fall back to the actual hard default, not
+  // whatever the PREVIOUS project (still sitting in seq.*) had it set to.
+  seq.bpm=typeof s.bpm==='number' ? s.bpm : SEQ_DEFAULT_BPM;
+  seq.stepDivision=[2,4,8].includes(s.stepDivision) ? s.stepDivision : SEQ_DEFAULT_STEP_DIVISION;
+  seq.beatsPerMeasure=typeof s.beatsPerMeasure==='number' ? s.beatsPerMeasure : SEQ_DEFAULT_BEATS_PER_MEASURE;
+  seq.groupSlots=(Array.isArray(s.groupSlots) && s.groupSlots.length) ? s.groupSlots.slice() : SEQ_DEFAULT_GROUP_SLOTS.slice();
   seq.rows=(Array.isArray(s.rows) && s.rows.length) ? s.rows.map(r=>{
     const row={id:r.id, voiceId:r.voiceId};
     if(r.unlinked && Array.isArray(r.groupSlots) && r.groupSlots.length){
@@ -4285,11 +4333,13 @@ function applyProjectState(data){
     renderPatternsSection();
   }
 
-  if(typeof data.masterVolume==='number'){
-    masterVolInput.value=data.masterVolume;
-    masterVolVal.textContent=Math.round(data.masterVolume*100);
-    if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
-  }
+  // Omitted from the file whenever it matched the default (see
+  // collectProjectState) -- fall back to that same default rather than
+  // leaving whatever the previous project's master volume was.
+  const masterVolume=typeof data.masterVolume==='number' ? data.masterVolume : SEQ_DEFAULT_MASTER_VOLUME;
+  masterVolInput.value=masterVolume;
+  masterVolVal.textContent=Math.round(masterVolume*100);
+  if(master && ctx) master.gain.setTargetAtTime(masterVolume, ctx.currentTime, 0.01);
 
   // View-only prefs (zoom, Hide Bars, M/S strip, which panels are open). A
   // file saved before this existed has no uiState at all -- for that case
