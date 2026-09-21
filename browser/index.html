@@ -634,6 +634,8 @@ canvas{
     </div>
     <div class="file-ctrl">
       <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
+      <button id="loadProjectBtn" class="file-btn" type="button">Load Project</button>
+      <input type="file" id="loadProjectInput" accept="application/json,.json" hidden>
     </div>
   </div>
 
@@ -1165,10 +1167,13 @@ function buildVoiceCard(voice){
 
 function renderVoices(){
   const rack=document.getElementById('rack');
+  rack.innerHTML=''; // safe to re-call (used for the initial build and after loading a project)
   VOICES.forEach(voice=>{
-    const initial={};
-    voice.params.forEach(p=>{ initial[p.id]=p.value; });
-    state.voices[voice.id]=initial;
+    if(!state.voices[voice.id]){
+      const initial={};
+      voice.params.forEach(p=>{ initial[p.id]=p.value; });
+      state.voices[voice.id]=initial;
+    }
     rack.appendChild(buildVoiceCard(voice));
   });
 }
@@ -1337,7 +1342,7 @@ function seqScheduleStep(stepIdx, time){
   seq.rows.forEach(row=>{
     if(seq.pattern[row.id][stepIdx]){
       const voice=VOICES.find(v=>v.id===row.voiceId);
-      voice.trigger(state.voices[row.voiceId], time);
+      if(voice) voice.trigger(state.voices[row.voiceId], time);
     }
   });
   const delayMs=Math.max(0, (time-ctx.currentTime)*1000);
@@ -1461,6 +1466,7 @@ function renderSequencer(){
   const groupStarts=new Set(seqGroupBoundaries(seq.groupSlots));
   seq.rows.forEach(row=>{
     const voice=VOICES.find(v=>v.id===row.voiceId);
+    if(!voice) return; // a row pointing at a voice that no longer exists (e.g. a corrupted/edited save file) -- skip it rather than throw
     const rowEl=document.createElement('div');
     rowEl.className='seq-row';
 
@@ -1993,6 +1999,124 @@ function saveProject(){
 }
 
 document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
+
+/* ---------- load project ---------- */
+// Rebuilds voices, sequencer and master volume from a file saved by
+// collectProjectState(). A clone can't carry its trigger function through
+// JSON, so it's rebuilt from its clonedFrom source's trigger/theory
+// instead (source always appears earlier in the file, since VOICES is only
+// ever appended to, never reordered, so a forward pass always resolves it).
+
+function applyProjectState(data){
+  if(seq.playing) seqStop();
+
+  const stockVoices=VOICES.filter(v=>!v.isClone);
+  const savedVoices=Array.isArray(data.voices) ? data.voices : [];
+  const rebuilt=[];
+  const byId={};
+  const newVoiceState={};
+
+  savedVoices.forEach(sv=>{
+    if(!sv || !sv.id) return;
+    if(!sv.isClone){
+      const stock=stockVoices.find(v=>v.id===sv.id);
+      if(!stock) return; // unknown stock id (older/newer file version) -- skip rather than fail the whole load
+      stock.name=sv.name || stock.name;
+      stock.key=(sv.key!=null) ? sv.key : stock.key;
+      rebuilt.push(stock);
+      byId[stock.id]=stock;
+      newVoiceState[stock.id]=sv.params ? {...sv.params} : state.voices[stock.id];
+    }else{
+      const base=byId[sv.clonedFrom] || stockVoices.find(v=>v.id===sv.clonedFrom);
+      if(!base) return; // can't rebuild a clone without its source's trigger function
+      const clone={
+        id:sv.id,
+        key:sv.key||'',
+        name:sv.name,
+        trigger:base.trigger,
+        theory:base.theory,
+        params:base.params.map(p=>({...p})),
+        isClone:true,
+        clonedFrom:sv.clonedFrom
+      };
+      rebuilt.push(clone);
+      byId[clone.id]=clone;
+      newVoiceState[clone.id]=sv.params ? {...sv.params} : {};
+    }
+  });
+
+  if(rebuilt.length){
+    VOICES.length=0;
+    VOICES.push(...rebuilt);
+    for(const k in state.voices) delete state.voices[k];
+    Object.assign(state.voices, newVoiceState);
+    for(const k in pads) delete pads[k];
+    renderVoices();
+  }
+
+  const s=data.sequencer||{};
+  seq.bpm=typeof s.bpm==='number' ? s.bpm : seq.bpm;
+  seq.beatsPerMeasure=typeof s.beatsPerMeasure==='number' ? s.beatsPerMeasure : seq.beatsPerMeasure;
+  seq.groupSlots=(Array.isArray(s.groupSlots) && s.groupSlots.length) ? s.groupSlots.slice() : seq.groupSlots;
+  seq.rows=(Array.isArray(s.rows) && s.rows.length) ? s.rows.map(r=>({id:r.id, voiceId:r.voiceId})) : seq.rows;
+  SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
+  seq.pattern={};
+  seq.rows.forEach(r=>{
+    const saved=s.pattern && s.pattern[r.id];
+    seq.pattern[r.id]=Array.isArray(saved) ? saved.slice(0, SEQ_STEPS) : [];
+    while(seq.pattern[r.id].length<SEQ_STEPS) seq.pattern[r.id].push(false);
+  });
+  seqCurrentStep=0;
+
+  // Keep future Add Row ids clear of anything this file already used.
+  let maxRowNum=-1;
+  seq.rows.forEach(r=>{
+    const m=/^row(\d+)$/.exec(r.id);
+    if(m) maxRowNum=Math.max(maxRowNum, parseInt(m[1], 10));
+  });
+  seqRowUid=Math.max(seqRowUid, maxRowNum+1);
+
+  seqTempoInput.value=seq.bpm;
+  seqTempoOut.textContent=seq.bpm+' BPM';
+  renderSequencer();
+  updateSeqMeasureUI();
+
+  if(typeof data.masterVolume==='number'){
+    masterVolInput.value=data.masterVolume;
+    if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
+  }
+
+  showHint('Project loaded.');
+}
+
+const loadProjectBtn=document.getElementById('loadProjectBtn');
+const loadProjectInput=document.getElementById('loadProjectInput');
+
+loadProjectBtn.addEventListener('click', ()=> loadProjectInput.click());
+
+loadProjectInput.addEventListener('change', ()=>{
+  const file=loadProjectInput.files[0];
+  loadProjectInput.value=''; // so choosing the same file again still fires 'change'
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let data;
+    try{
+      data=JSON.parse(reader.result);
+    }catch(err){
+      showHint('Could not load that file: not valid JSON.');
+      return;
+    }
+    if(!data || data.format!=='d20-synth-project'){
+      showHint('That file is not a D20 synth project.');
+      return;
+    }
+    if(!confirm('Load "'+file.name+'"? This replaces the current project.')) return;
+    applyProjectState(data);
+  };
+  reader.onerror=()=>{ showHint('Could not read that file.'); };
+  reader.readAsText(file);
+});
 
 window.addEventListener('keydown', (e)=>{
   if(e.repeat) return;
