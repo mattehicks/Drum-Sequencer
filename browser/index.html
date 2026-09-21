@@ -213,6 +213,43 @@ canvas{
 .step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
 .step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
 
+.seq-beats-ctrl{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid var(--border);
+}
+.seq-beats-label{
+  font-size:11px;
+  color:var(--subtext);
+  margin-right:2px;
+}
+.seq-beats-btn{
+  width:26px; height:26px;
+  padding:0;
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:1;
+  font-weight:700;
+  background:var(--panel-2);
+  color:var(--accent);
+  border:1px solid var(--border);
+  border-radius:6px;
+  cursor:pointer;
+}
+.seq-beats-btn:hover{border-color:var(--accent);}
+.seq-beats-btn:disabled{opacity:0.35; cursor:default; border-color:var(--border); color:var(--subtext);}
+#seqBeatsVal{
+  font-family:var(--mono);
+  font-size:13px;
+  font-weight:600;
+  color:var(--text);
+  min-width:18px;
+  text-align:center;
+}
+
 .rack{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
@@ -389,13 +426,15 @@ canvas{
         <input type="range" id="seqTempo" min="60" max="200" step="1" value="112">
         <output id="seqTempoOut">112 BPM</output>
       </label>
-      <label class="seq-tempo">Beats
-        <input type="range" id="seqBeats" min="2" max="12" step="1" value="4">
-        <output id="seqBeatsOut">4 / measure</output>
-      </label>
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
     </div>
     <div class="seq-body" id="seqBody"></div>
+    <div class="seq-beats-ctrl">
+      <span class="seq-beats-label">Beats / measure</span>
+      <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
+      <output id="seqBeatsVal" for="seqBody">4</output>
+      <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
+    </div>
     <details class="theory">
       <summary>Theory</summary>
       <p id="seqTheory"></p>
@@ -1007,6 +1046,7 @@ function seqResize(newBeats){
   SEQ_STEPS=newStepCount;
   seqCurrentStep=0;
   renderSequencer();
+  updateSeqBeatsUI();
 }
 
 function renderSequencer(){
@@ -1060,13 +1100,22 @@ seqTempoInput.addEventListener('input', ()=>{
   seqTempoOut.textContent=seq.bpm+' BPM';
 });
 
-const seqBeatsInput=document.getElementById('seqBeats');
-const seqBeatsOut=document.getElementById('seqBeatsOut');
-seqBeatsInput.addEventListener('input', ()=>{
-  seqBeatsOut.textContent=seqBeatsInput.value+' / measure';
+const seqBeatsDec=document.getElementById('seqBeatsDec');
+const seqBeatsInc=document.getElementById('seqBeatsInc');
+const seqBeatsVal=document.getElementById('seqBeatsVal');
+const SEQ_BEATS_MIN=2, SEQ_BEATS_MAX=12;
+
+function updateSeqBeatsUI(){
+  seqBeatsVal.textContent=String(seq.beatsPerMeasure);
+  seqBeatsDec.disabled=seq.beatsPerMeasure<=SEQ_BEATS_MIN;
+  seqBeatsInc.disabled=seq.beatsPerMeasure>=SEQ_BEATS_MAX;
+}
+
+seqBeatsDec.addEventListener('click', ()=>{
+  if(seq.beatsPerMeasure>SEQ_BEATS_MIN) seqResize(seq.beatsPerMeasure-1);
 });
-seqBeatsInput.addEventListener('change', ()=>{
-  seqResize(parseInt(seqBeatsInput.value, 10));
+seqBeatsInc.addEventListener('click', ()=>{
+  if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqResize(seq.beatsPerMeasure+1);
 });
 seqClearBtn.addEventListener('click', ()=>{
   SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
@@ -1259,6 +1308,7 @@ window.addEventListener('keydown', (e)=>{
 
 renderVoices();
 renderSequencer();
+updateSeqBeatsUI();
 
 })();
 </script>
