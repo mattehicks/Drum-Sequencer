@@ -21,9 +21,9 @@ body{
   margin:0;
 }
 .app{
-  max-width:1180px;
-  margin:0 auto;
-  padding-inline:16px;
+  max-width:none;
+  margin:0;
+  padding-inline:10px;
   padding-block:20px 48px;
   display:flex;
   flex-direction:column;
@@ -388,6 +388,10 @@ canvas{
       <label class="seq-tempo">Tempo
         <input type="range" id="seqTempo" min="60" max="200" step="1" value="112">
         <output id="seqTempoOut">112 BPM</output>
+      </label>
+      <label class="seq-tempo">Beats
+        <input type="range" id="seqBeats" min="2" max="12" step="1" value="4">
+        <output id="seqBeatsOut">4 / measure</output>
       </label>
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
     </div>
@@ -911,10 +915,12 @@ function firePad(voice, padEl){
 /* ---------- step sequencer ---------- */
 
 const SEQ_ROWS=['kick','snare','hihat','clap','tom'];
-const SEQ_STEPS=16;
+const STEPS_PER_BEAT=4;
+let SEQ_STEPS=16;
 
 const seq={
   bpm:112,
+  beatsPerMeasure:4,
   playing:false,
   pattern:{
     kick:  [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
@@ -988,6 +994,21 @@ function seqStop(){
   seqPlayBtn.classList.remove('active');
 }
 
+function seqResize(newBeats){
+  if(seq.playing) seqStop();
+  seq.beatsPerMeasure=newBeats;
+  const newStepCount=newBeats*STEPS_PER_BEAT;
+  SEQ_ROWS.forEach(id=>{
+    const old=seq.pattern[id];
+    const next=new Array(newStepCount).fill(false);
+    for(let i=0;i<Math.min(old.length, newStepCount);i++) next[i]=old[i];
+    seq.pattern[id]=next;
+  });
+  SEQ_STEPS=newStepCount;
+  seqCurrentStep=0;
+  renderSequencer();
+}
+
 function renderSequencer(){
   const body=document.getElementById('seqBody');
   body.innerHTML='';
@@ -995,6 +1016,7 @@ function renderSequencer(){
     const voice=VOICES.find(v=>v.id===voiceId);
     const row=document.createElement('div');
     row.className='seq-row';
+    row.style.minWidth=Math.max(320, 90+SEQ_STEPS*26)+'px';
 
     const label=document.createElement('span');
     label.className='seq-row-label';
@@ -1007,10 +1029,11 @@ function renderSequencer(){
 
     const cells=document.createElement('div');
     cells.className='seq-cells';
+    cells.style.gridTemplateColumns='repeat('+SEQ_STEPS+', minmax(22px,1fr))';
     for(let i=0;i<SEQ_STEPS;i++){
       const btn=document.createElement('button');
       btn.type='button';
-      btn.className='step'+(i%4===0?' group-start':'');
+      btn.className='step'+(i%STEPS_PER_BEAT===0?' group-start':'');
       btn.dataset.col=String(i);
       btn.dataset.voice=voiceId;
       if(seq.pattern[voiceId][i]) btn.classList.add('on');
@@ -1036,13 +1059,22 @@ seqTempoInput.addEventListener('input', ()=>{
   seq.bpm=parseFloat(seqTempoInput.value);
   seqTempoOut.textContent=seq.bpm+' BPM';
 });
+
+const seqBeatsInput=document.getElementById('seqBeats');
+const seqBeatsOut=document.getElementById('seqBeatsOut');
+seqBeatsInput.addEventListener('input', ()=>{
+  seqBeatsOut.textContent=seqBeatsInput.value+' / measure';
+});
+seqBeatsInput.addEventListener('change', ()=>{
+  seqResize(parseInt(seqBeatsInput.value, 10));
+});
 seqClearBtn.addEventListener('click', ()=>{
   SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
   document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
 });
 
 document.getElementById('seqTheory').textContent=
-  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing.";
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. Total step count = Beats x 4 -- the subdivision is fixed at 16th notes per beat, so 4 beats gives the original 16 steps, 3 gives 12 (3/4-style), 7 gives 28 (7/4-style), and so on. Changing Beats stops playback, resizes every row (keeping whatever steps still fit), and resets to step 1.";
 
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
