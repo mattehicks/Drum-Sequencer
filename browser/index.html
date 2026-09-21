@@ -1008,7 +1008,7 @@ canvas{
       <label class="master-vol">
         <span class="master-vol-top">
           <span>Master</span>
-          <output id="masterVolVal" for="masterVol">20%</output>
+          <output id="masterVolVal" for="masterVol">20</output>
         </span>
         <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.2">
       </label>
@@ -3162,7 +3162,7 @@ const engineBtn=document.getElementById('engineBtn');
 const engineStatus=document.getElementById('engineStatus');
 const masterVolInput=document.getElementById('masterVol');
 const masterVolVal=document.getElementById('masterVolVal');
-masterVolVal.textContent=Math.round(parseFloat(masterVolInput.value)*100)+'%';
+masterVolVal.textContent=Math.round(parseFloat(masterVolInput.value)*100);
 
 engineBtn.addEventListener('click', async ()=>{
   if(!ctx){
@@ -3198,7 +3198,7 @@ engineBtn.addEventListener('click', async ()=>{
 });
 
 masterVolInput.addEventListener('input', ()=>{
-  masterVolVal.textContent=Math.round(parseFloat(masterVolInput.value)*100)+'%';
+  masterVolVal.textContent=Math.round(parseFloat(masterVolInput.value)*100);
   if(master) master.gain.setTargetAtTime(parseFloat(masterVolInput.value), ctx.currentTime, 0.01);
 });
 
@@ -3373,7 +3373,7 @@ function applyProjectState(data){
 
   if(typeof data.masterVolume==='number'){
     masterVolInput.value=data.masterVolume;
-    masterVolVal.textContent=Math.round(data.masterVolume*100)+'%';
+    masterVolVal.textContent=Math.round(data.masterVolume*100);
     if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
   }
 
