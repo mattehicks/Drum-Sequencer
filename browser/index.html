@@ -19,7 +19,7 @@
   --seq-cell:48px;
   --seq-gap:4px;
   --seq-group-gap:8px;
-  --seq-label-w:64px;
+  --seq-label-w:108px;
   --seq-row-gap:10px;
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans:'Barlow', system-ui, -apple-system, sans-serif;
@@ -256,11 +256,26 @@ canvas{
   flex:none;
   width:var(--seq-label-w);
   display:flex;
-  align-items:center;
-  gap:6px;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:4px;
   font-size:11px;
   color:var(--subtext);
   font-family:var(--mono);
+}
+.seq-row-name{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:100%;
+}
+.seq-row-name span{
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .seq-row-voice-btn{
   border:none;
@@ -392,8 +407,8 @@ canvas{
 }
 
 .seq-row-block{display:flex; flex-direction:column;}
-.seq-row-block + .seq-row-block{margin-top:10px;}
-.seq-row-flags{display:flex; align-items:center; gap:4px; margin-left:6px;}
+.seq-row-block + .seq-row-block{margin-top:14px;}
+.seq-row-flags{display:flex; align-items:center; gap:4px;}
 .seq-flag-btn{
   font-family:var(--mono);
   font-size:9px;
@@ -402,11 +417,12 @@ canvas{
   background:transparent;
   color:var(--subtext);
   border:1px solid var(--border);
-  padding:2px 6px;
+  padding:2px 5px;
   border-radius:4px;
   cursor:pointer;
   line-height:1.4;
   white-space:nowrap;
+  flex:none;
 }
 .seq-flag-btn:hover{border-color:var(--accent-2); color:var(--accent-2);}
 .seq-flag-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
@@ -736,7 +752,7 @@ canvas{
 @media (max-width:640px){
   .analysis-body{grid-template-columns:1fr;}
   .param{grid-template-columns: 72px 1fr 50px;}
-  .seq-row-label{width:52px; font-size:10px;}
+  .seq-row-label{width:80px; font-size:10px;}
 }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -1827,15 +1843,20 @@ function renderSequencer(){
       openVoicePicker(keyBadge, row.voiceId, (voiceId)=> seqSetRowVoice(row.id, voiceId));
     });
     label.title='Right-click row for options';
-    label.appendChild(keyBadge);
-    label.appendChild(document.createTextNode(voice.name));
+    const nameLine=document.createElement('span');
+    nameLine.className='seq-row-name';
+    const nameText=document.createElement('span');
+    nameText.textContent=voice.name;
+    nameLine.appendChild(keyBadge);
+    nameLine.appendChild(nameText);
+    label.appendChild(nameLine);
 
     const flags=document.createElement('span');
     flags.className='seq-row-flags';
     const unlinkBtn=document.createElement('button');
     unlinkBtn.type='button';
     unlinkBtn.className='seq-flag-btn'+(unlinked?' active':'');
-    unlinkBtn.textContent=unlinked?'OWN TIME':'LINKED';
+    unlinkBtn.textContent=unlinked?'OWN':'LINK';
     unlinkBtn.title=unlinked
       ? 'This row has its own measure structure ('+steps+' slots). Click to re-link it to the shared Beats/measure structure above.'
       : 'This row follows the shared Beats/measure structure above. Click to give it its own independent measure structure.';
