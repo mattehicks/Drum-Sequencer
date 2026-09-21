@@ -3138,7 +3138,10 @@ seqClearBtn.addEventListener('click', ()=>{
 // way in the image.
 function seqBuildScreenshotCanvas(){
   if(!seq.rows.length) return null;
-  const cellSize=28, cellGap=3, lineGap=8, rowGap=16, labelW=150, pad=18;
+  // Labels sit above each row's grid now (centered), not in a left-hand
+  // column -- so the grid itself, not a label gutter, decides the canvas
+  // width, and it renders centered in the image rather than shifted right.
+  const cellSize=28, cellGap=3, lineGap=8, rowGap=20, pad=18, labelH=16, labelGap=6;
   const cs=getComputedStyle(sequencerEl);
   const bg=(cs.getPropertyValue('--panel')||'#1b1d23').trim()||'#1b1d23';
   const onColor=(cs.getPropertyValue('--accent')||'#ff8a3d').trim()||'#ff8a3d';
@@ -3174,11 +3177,12 @@ function seqBuildScreenshotCanvas(){
 
   let maxLineW=1;
   rowsData.forEach(r=> r.lines.forEach(l=> maxLineW=Math.max(maxLineW, lineWidthPx(r, l))));
-  const canvasW=Math.round(pad*2+labelW+maxLineW);
+  const canvasW=Math.round(pad*2+maxLineW);
 
   let canvasH=pad*2;
   rowsData.forEach((r,ri)=>{
-    canvasH += r.lines.length*cellSize+(r.lines.length-1)*lineGap;
+    const gridHeight=r.lines.length*cellSize+(r.lines.length-1)*lineGap;
+    canvasH += labelH+labelGap+gridHeight;
     if(ri<rowsData.length-1) canvasH+=rowGap;
   });
 
@@ -3190,15 +3194,20 @@ function seqBuildScreenshotCanvas(){
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.font='600 12px '+monoFont;
   ctx.textBaseline='middle';
+  ctx.textAlign='center';
 
   let y=pad;
   rowsData.forEach(r=>{
-    const rowHeight=r.lines.length*cellSize+(r.lines.length-1)*lineGap;
+    const gridHeight=r.lines.length*cellSize+(r.lines.length-1)*lineGap;
     ctx.fillStyle=textColor;
-    ctx.fillText(r.name, pad, y+rowHeight/2, labelW-10);
+    ctx.fillText(r.name, pad+maxLineW/2, y+labelH/2, maxLineW);
+    const gridY=y+labelH+labelGap;
     r.lines.forEach((line, li)=>{
-      const lineY=y+li*(cellSize+lineGap);
-      let x=pad+labelW;
+      const lineY=gridY+li*(cellSize+lineGap);
+      // Centered under the label (and within the canvas as a whole) rather
+      // than flush against a label column, so a shorter wrapped line (the
+      // last one, say) still sits in the middle instead of hugging the left.
+      let x=pad+(maxLineW-lineWidthPx(r, line))/2;
       for(let i=line.stepStart;i<line.stepEnd;i++){
         if(i>line.stepStart) x+=cellGap+(r.groupStarts.has(i)?groupGap:0);
         // Same brightness floor as the live grid's --cell-vel (25%-100%),
@@ -3213,7 +3222,7 @@ function seqBuildScreenshotCanvas(){
         x+=cellSize;
       }
     });
-    y+=rowHeight+rowGap;
+    y+=labelH+labelGap+gridHeight+rowGap;
   });
 
   return canvas;
@@ -3997,14 +4006,52 @@ function collectProjectState(){
   };
 }
 
-function saveProject(){
+// Reused across repeat saves so "Save Project" overwrites the same file in
+// place instead of going through the anchor-download fallback below, whose
+// browser-managed download always lands as a fresh file -- appending
+// "(1)", "(2)", etc. rather than replacing the last save. Cleared whenever
+// a project is loaded (see loadProjectInput below), so a freshly opened
+// file doesn't silently get clobbered by a save meant for a different one.
+let seqSaveFileHandle=null;
+
+async function saveProject(){
   const data=collectProjectState();
   const json=JSON.stringify(data, null, 2);
-  const blob=new Blob([json], {type:'application/json'});
-  const url=URL.createObjectURL(blob);
   const stamp=data.savedAt.replace(/[:.]/g,'-').slice(0,19);
   const safeName=data.name ? data.name.replace(/[\\/:*?"<>|]/g,'').trim() : '';
   const filename=safeName ? safeName+'.json' : 'd20-synth-project-'+stamp+'.json';
+
+  // File System Access API: the first save prompts for a location (like
+  // any Save dialog); every later save reuses that same handle and writes
+  // straight to it, a true in-place overwrite with no picker and no
+  // numbered duplicate. Falls back to the old anchor-download for browsers
+  // that don't support it (Firefox, Safari).
+  if(window.showSaveFilePicker){
+    try{
+      if(!seqSaveFileHandle){
+        seqSaveFileHandle=await window.showSaveFilePicker({
+          suggestedName:filename,
+          types:[{description:'D20 Synth Project', accept:{'application/json':['.json']}}]
+        });
+      }
+      const perm=await seqSaveFileHandle.queryPermission({mode:'readwrite'});
+      if(perm!=='granted' && await seqSaveFileHandle.requestPermission({mode:'readwrite'})!=='granted'){
+        throw new Error('write permission denied');
+      }
+      const writable=await seqSaveFileHandle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      showHint('Project saved.');
+      return;
+    }catch(err){
+      if(err && err.name==='AbortError') return; // user dismissed the picker -- not an error
+      seqSaveFileHandle=null; // handle is stale (file moved/deleted/denied) -- re-prompt next time
+      // this one save still goes out, via the fallback below
+    }
+  }
+
+  const blob=new Blob([json], {type:'application/json'});
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
   a.download=filename;
@@ -4168,6 +4215,7 @@ loadProjectInput.addEventListener('change', ()=>{
       showHint('That file is not a D20 synth project.');
       return;
     }
+    seqSaveFileHandle=null; // this file wasn't opened via the Save picker -- don't let a later Save silently overwrite whatever the handle used to point at
     applyProjectState(data);
   };
   reader.onerror=()=>{ showHint('Could not read that file.'); };
