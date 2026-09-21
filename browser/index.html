@@ -468,6 +468,27 @@ canvas{
     0 0 0 2px rgba(var(--accent-2-rgb),0.85),
     0 0 12px rgba(var(--accent-2-rgb),0.5);
 }
+/* Live velocity readout shown only while a cell is being shift-dragged
+   (seqBeginCellVolDrag toggles the parent .vel-dragging class; the span
+   itself is created lazily and just stays in the DOM, hidden, between
+   drags). Centered over the cell regardless of its current brightness --
+   white text plus a dark shadow reads on both a dim and a fully-lit cell. */
+.step .step-vel-num{
+  display:none;
+  position:absolute;
+  inset:0;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  font-weight:700;
+  color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.6);
+  pointer-events:none;
+  letter-spacing:-0.02em;
+}
+.step.vel-dragging .step-vel-num{
+  display:flex;
+}
 .step.seq-current{
   border-color:rgba(var(--accent-2-rgb),0.9);
   box-shadow:
@@ -2041,11 +2062,27 @@ function seqApplyCellVelStyle(btn, row, idx){
   btn.style.setProperty('--cell-vel', seqCellVelFrac(v).toFixed(3));
   btn.title='Step '+(idx+1)+' — velocity '+v+' (shift+drag to adjust)';
 }
+// Returns this step button's velocity-readout span, creating it the first
+// time it's needed. Left in the DOM (just hidden via CSS) between drags
+// rather than added/removed each time, since renderSequencer only rebuilds
+// the buttons wholesale on layout changes, not on every drag.
+function seqCellVelNumEl(btn){
+  let el=btn.querySelector('.step-vel-num');
+  if(!el){
+    el=document.createElement('span');
+    el.className='step-vel-num';
+    btn.appendChild(el);
+  }
+  return el;
+}
 // Shift+dragging a step cell sets its velocity instead of toggling it --
 // same diagonal drag-to-adjust gesture as seqWireVolBox (the row volume
 // box), just scoped to one cell via pointer capture rather than a
 // dedicated control. Turns the step on, since adjusting the volume of a
-// step that isn't playing wouldn't mean anything.
+// step that isn't playing wouldn't mean anything. While the drag is live,
+// a white numeric overlay (seqCellVelNumEl) shows the current value on
+// top of the cell itself, so the exact number doesn't only live in the
+// tooltip.
 const SEQ_CELL_VEL_DRAG_SENSITIVITY=1; // velocity units per px of diagonal travel
 function seqBeginCellVolDrag(btn, row, idx, startEvent){
   startEvent.preventDefault();
@@ -2054,6 +2091,8 @@ function seqBeginCellVolDrag(btn, row, idx, startEvent){
   if(pat){ pat[idx]=true; btn.classList.add('on'); }
   const startX=startEvent.clientX, startY=startEvent.clientY;
   const startVal=rowCellVelocity(row, idx);
+  const numEl=seqCellVelNumEl(btn);
+  numEl.textContent=String(startVal);
   btn.classList.add('vel-dragging');
   btn.setPointerCapture(startEvent.pointerId);
   const onMove=(e)=>{
@@ -2061,6 +2100,7 @@ function seqBeginCellVolDrag(btn, row, idx, startEvent){
     const delta=(dx-dy)*SEQ_CELL_VEL_DRAG_SENSITIVITY;
     rowSetCellVelocity(row, idx, startVal+delta);
     seqApplyCellVelStyle(btn, row, idx);
+    numEl.textContent=String(rowCellVelocity(row, idx));
   };
   const end=(e)=>{
     btn.classList.remove('vel-dragging');
