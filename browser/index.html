@@ -2628,6 +2628,11 @@ function seqDeleteRow(rowId){
 // under, so it just hides itself -- the coarse Beats/measure stepper in the
 // header keeps working regardless, since it's what a re-linked or new row
 // falls back to.
+// Vertical pitch of one stacked control-box line: the box's own CSS height
+// (26px) plus the gap .seq-cells-wrap uses between stacked cell lines
+// (6px), so the strip's rows line up with the cell rows above it.
+const SEQ_GROUP_CTRL_LINE_PITCH=26+6;
+
 function positionGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
   const firstLinkedBlock=document.querySelector('#seqRows .seq-row-block[data-linked="true"]');
@@ -2635,21 +2640,29 @@ function positionGroupControls(){
   wrap.style.display='';
   const wrapRect=wrap.getBoundingClientRect();
   const bounds=seqGroupBoundaries(seq.groupSlots);
+  // #seqGroupCtrls sits after every row in the DOM (it's shared by all
+  // linked rows, not nested inside any one of them), so a box's vertical
+  // position can't be read off firstCell's screen position the way left/
+  // width can -- that cell can be far ABOVE this wrap, which would make a
+  // naive fRect.top-wrapRect.top go negative and send every box flying up
+  // above the whole grid. Instead, work out which stacked line (by index,
+  // via the same chunking used to render the row) the group landed on, and
+  // place it that many line-pitches down from the wrap's own top.
+  const lines=seqGroupLineChunks(seq.groupSlots);
   let maxBottom=0;
   Array.from(wrap.children).forEach((box, g)=>{
     const start=bounds[g];
     const end=start+seq.groupSlots[g]-1;
-    // Scoped to the whole row block, not one line -- with auto-stacking a
-    // group's cells can be on any of the row's stacked lines.
     const firstCell=firstLinkedBlock.querySelector('.step[data-col="'+start+'"]');
     const lastCell=firstLinkedBlock.querySelector('.step[data-col="'+end+'"]');
     if(!firstCell||!lastCell) return;
     const fRect=firstCell.getBoundingClientRect();
     const lRect=lastCell.getBoundingClientRect();
-    const top=fRect.top-wrapRect.top;
-    box.style.top=top+'px';
     box.style.left=(fRect.left-wrapRect.left)+'px';
     box.style.width=(lRect.right-fRect.left)+'px';
+    const lineIdx=Math.max(0, lines.findIndex(l=> g>=l.groupStart && g<l.groupEnd));
+    const top=lineIdx*SEQ_GROUP_CTRL_LINE_PITCH;
+    box.style.top=top+'px';
     maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
   // The strip's own height now spans as many stacked lines as the row
@@ -2752,6 +2765,11 @@ function positionRowControls(row){
   if(!ctrlsEl) return;
   const wrapRect=ctrlsEl.getBoundingClientRect();
   const bounds=seqGroupBoundaries(row.groupSlots);
+  // Same reasoning as positionGroupControls: this strip sits after the
+  // row's cells in the DOM, so top has to come from which stacked line
+  // (by index) a group landed on, not from a firstCell-vs-wrap pixel
+  // subtraction -- that would go negative and float the boxes upward.
+  const lines=seqGroupLineChunks(row.groupSlots);
   let maxBottom=0;
   Array.from(ctrlsEl.children).forEach((box, g)=>{
     const start=bounds[g];
@@ -2763,10 +2781,11 @@ function positionRowControls(row){
     if(!firstCell||!lastCell) return;
     const fRect=firstCell.getBoundingClientRect();
     const lRect=lastCell.getBoundingClientRect();
-    const top=fRect.top-wrapRect.top;
-    box.style.top=top+'px';
     box.style.left=(fRect.left-wrapRect.left)+'px';
     box.style.width=(lRect.right-fRect.left)+'px';
+    const lineIdx=Math.max(0, lines.findIndex(l=> g>=l.groupStart && g<l.groupEnd));
+    const top=lineIdx*SEQ_GROUP_CTRL_LINE_PITCH;
+    box.style.top=top+'px';
     maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
   ctrlsEl.style.height=(maxBottom||26)+'px';
@@ -3975,7 +3994,6 @@ loadProjectInput.addEventListener('change', ()=>{
       showHint('That file is not a D20 synth project.');
       return;
     }
-    if(!confirm('Load "'+file.name+'"? This replaces the current project.')) return;
     applyProjectState(data);
   };
   reader.onerror=()=>{ showHint('Could not read that file.'); };
