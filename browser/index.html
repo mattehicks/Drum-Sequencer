@@ -575,6 +575,23 @@ canvas{
 .seq-row-block{display:flex; flex-direction:column;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
 .seq-row-flags{display:flex; align-items:center; gap:4px;}
+.seq-row-perbeat{
+  flex:none;
+  width:34px;
+  height:30px;
+  font-family:var(--mono);
+  font-size:13px;
+  font-weight:600;
+  text-align:center;
+  background:rgba(var(--paste-green-rgb),0.08);
+  border:1.5px solid rgba(var(--paste-green-rgb),0.75);
+  border-radius:6px;
+  color:var(--paste-green);
+  -moz-appearance:textfield;
+}
+.seq-row-perbeat::-webkit-inner-spin-button,
+.seq-row-perbeat::-webkit-outer-spin-button{-webkit-appearance:none; margin:0;}
+.seq-row-perbeat:focus-visible{outline:1px solid var(--paste-green); outline-offset:1px;}
 .seq-flag-btn{
   --glass-rgb:154,150,145;
   font-family:var(--mono);
@@ -1879,6 +1896,26 @@ function rowSetMode(row, mode){
   renderSequencer();
 }
 
+// Quick per-row control: sets this row's slots-per-beat uniformly across
+// every beat it currently has, instead of dialing each beat's group
+// individually. Implicitly unlinks the row first (a linked row shares the
+// global groupSlots, so it has nothing of its own to set uniformly) --
+// same one-time clone-and-rebuild as rowSetUnlinked, just followed
+// immediately by flattening every group to the requested count.
+function rowSetUniformSlotsPerBeat(row, n){
+  const clamped=Math.min(SEQ_SLOTS_MAX, Math.max(SEQ_SLOTS_MIN, Math.round(n)||SEQ_SLOTS_MIN));
+  const oldGroupSlots=rowGroupSlots(row).slice();
+  const beatCount=oldGroupSlots.length;
+  const newGroupSlots=new Array(beatCount).fill(clamped);
+  if(!rowIsUnlinked(row)){
+    row.unlinked=true;
+    row.mode=row.mode||'loop';
+  }
+  seqRebuildRowPattern(row, oldGroupSlots, newGroupSlots);
+  row.groupSlots=newGroupSlots;
+  renderSequencer();
+}
+
 // Per-row playhead: rows can now have different lengths and different step
 // durations at once, so the single global highlighted column of before
 // becomes a per-row map of {rowId: column}, and every lookup is scoped by
@@ -2198,6 +2235,22 @@ function renderSequencer(){
     }
     label.appendChild(flags);
     rowEl.appendChild(label);
+
+    const perBeatInput=document.createElement('input');
+    perBeatInput.type='number';
+    perBeatInput.className='seq-row-perbeat';
+    perBeatInput.min=String(SEQ_SLOTS_MIN);
+    perBeatInput.max=String(SEQ_SLOTS_MAX);
+    perBeatInput.step='1';
+    perBeatInput.value=String(groupSlots[0]);
+    perBeatInput.title='This number sets how many slots per beat for '+voice.name+'. Changing it gives this row its own measure (OWN TIME), divided evenly across every beat.';
+    perBeatInput.setAttribute('aria-label', 'Slots per beat for '+voice.name);
+    perBeatInput.addEventListener('click', (e)=> e.stopPropagation());
+    perBeatInput.addEventListener('contextmenu', (e)=> e.stopPropagation());
+    perBeatInput.addEventListener('change', ()=>{
+      rowSetUniformSlotsPerBeat(row, parseFloat(perBeatInput.value));
+    });
+    rowEl.appendChild(perBeatInput);
 
     rowEl.addEventListener('contextmenu', (e)=>{
       e.preventDefault();
