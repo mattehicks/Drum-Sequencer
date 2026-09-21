@@ -1365,6 +1365,31 @@ function triggerChaos(p, when){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
+function triggerClick(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
+  const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
+
+  const osc=ctx.createOscillator(); osc.type='sine';
+  osc.frequency.setValueAtTime(p.freq, t0);
+  const env=ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(1, t0+0.001);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0+p.decay);
+  osc.connect(env).connect(bus);
+  osc.start(t0); osc.stop(t0+p.decay+0.02);
+
+  if(p.snap>0){
+    const src=ctx.createBufferSource(); src.buffer=noiseBuffer;
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=p.freq*2;
+    const nEnv=ctx.createGain();
+    nEnv.gain.setValueAtTime(p.snap, t0);
+    nEnv.gain.exponentialRampToValueAtTime(0.0001, t0+0.008);
+    src.connect(hp).connect(nEnv).connect(bus);
+    src.start(t0); src.stop(t0+0.02);
+  }
+  setTimeout(()=>bus.disconnect(), (p.decay+0.1)*1000);
+}
+
 /* ---------- voice registry ---------- */
 
 const VOICES=[
@@ -1469,6 +1494,26 @@ const VOICES=[
       {id:'q',label:'Filter Q',min:0.5,max:6,step:0.1,value:1.5,unit:''},
       {id:'decay',label:'Decay',min:0.05,max:0.6,step:0.01,value:0.15,unit:'s'},
       {id:'chaosR',label:'Map r',min:3.5,max:4.0,step:0.001,value:3.97,unit:''}
+    ]
+  },
+  {
+    id:'click1', key:'', name:'Click1', trigger:triggerClick,
+    theory:"A millisecond-scale sine blip -- no pitch sweep, no resonant body, just an envelope and a touch of highpass-filtered noise for transient snap -- the same minimal recipe drum machines and metronomes use for count-in and click-track ticks. Click1/Click2 are the same circuit tuned to two different frequencies, like a hi/lo woodblock pair, so they read as distinct hits at a glance without needing a keyboard slot of their own.",
+    params:[
+      {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.8,unit:''},
+      {id:'freq',label:'Freq',min:200,max:4000,step:10,value:1800,unit:'Hz'},
+      {id:'decay',label:'Decay',min:0.005,max:0.2,step:0.005,value:0.02,unit:'s'},
+      {id:'snap',label:'Snap',min:0,max:1,step:0.01,value:0.6,unit:''}
+    ]
+  },
+  {
+    id:'click2', key:'', name:'Click2', trigger:triggerClick,
+    theory:"A millisecond-scale sine blip -- no pitch sweep, no resonant body, just an envelope and a touch of highpass-filtered noise for transient snap -- the same minimal recipe drum machines and metronomes use for count-in and click-track ticks. Click1/Click2 are the same circuit tuned to two different frequencies, like a hi/lo woodblock pair, so they read as distinct hits at a glance without needing a keyboard slot of their own.",
+    params:[
+      {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.8,unit:''},
+      {id:'freq',label:'Freq',min:200,max:4000,step:10,value:700,unit:'Hz'},
+      {id:'decay',label:'Decay',min:0.005,max:0.2,step:0.005,value:0.045,unit:'s'},
+      {id:'snap',label:'Snap',min:0,max:1,step:0.01,value:0.35,unit:''}
     ]
   }
 ];
