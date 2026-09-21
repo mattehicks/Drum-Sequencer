@@ -746,6 +746,22 @@ canvas{
   border-radius:5px;
   padding:6px 8px;
 }
+.project-name-input{
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+  margin-bottom:16px;
+  font-family:var(--mono);
+  font-size:14px;
+  font-weight:600;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:6px;
+  padding:10px 12px;
+}
+.project-name-input::placeholder{color:var(--subtext); font-weight:400;}
+.project-name-input:focus-visible{outline:none; border-color:rgba(var(--accent-2-rgb),0.6); box-shadow:0 0 0 1px rgba(var(--accent-2-rgb),0.6);}
 .pattern-pairs{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
 .pattern-pair{
   display:flex;
@@ -1063,6 +1079,8 @@ canvas{
   </header>
 
   <div id="hint" class="hint" aria-live="polite"></div>
+
+  <input type="text" id="projectNameInput" class="project-name-input" placeholder="Project name" autocomplete="off" spellcheck="false">
 
   <section class="analysis" id="analysisPanel">
     <div class="analysis-head">
@@ -3573,10 +3591,12 @@ masterVolInput.addEventListener('input', ()=>{
 
 function collectProjectState(){
   const rowIds=seq.rows.map(r=>r.id);
+  const projectName=document.getElementById('projectNameInput').value.trim();
   return {
     format:'d20-synth-project',
     version:1,
     savedAt:new Date().toISOString(),
+    name:projectName || undefined,
     masterVolume:parseFloat(masterVolInput.value),
     sequencer:{
       bpm:seq.bpm,
@@ -3615,9 +3635,11 @@ function saveProject(){
   const blob=new Blob([json], {type:'application/json'});
   const url=URL.createObjectURL(blob);
   const stamp=data.savedAt.replace(/[:.]/g,'-').slice(0,19);
+  const safeName=data.name ? data.name.replace(/[\\/:*?"<>|]/g,'').trim() : '';
+  const filename=safeName ? safeName+'.json' : 'd20-synth-project-'+stamp+'.json';
   const a=document.createElement('a');
   a.href=url;
-  a.download='d20-synth-project-'+stamp+'.json';
+  a.download=filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -3743,6 +3765,8 @@ function applyProjectState(data){
     masterVolVal.textContent=Math.round(data.masterVolume*100);
     if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
   }
+
+  document.getElementById('projectNameInput').value=data.name || '';
 
   showHint('Project loaded.');
 }
