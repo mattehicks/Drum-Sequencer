@@ -3002,18 +3002,34 @@ function seqBuildScreenshotCanvas(){
   const borderColor=(cs.getPropertyValue('--border')||'#33363f').trim()||'#33363f';
   const textColor=(cs.getPropertyValue('--text')||'#eae6df').trim()||'#eae6df';
   const monoFont=(cs.getPropertyValue('--mono')||'monospace').trim()||'monospace';
+  // Same per-beat gap the live grid uses (.step.group-start), so a line
+  // reads the same way here as it does on screen -- clusters of cells with
+  // a visible break at every beat, not one undifferentiated strip.
+  const groupGap=parseFloat(cs.getPropertyValue('--seq-group-gap'))||8;
 
   const rowsData=seq.rows.map(row=>{
     const voice=VOICES.find(v=>v.id===row.voiceId);
     const groupSlots=rowGroupSlots(row);
     const pat=seq.pattern[row.id]||[];
-    return {name:voice?voice.name:row.voiceId, pat, lines:seqGroupLineChunks(groupSlots)};
+    const groupStarts=new Set(seqGroupBoundaries(groupSlots));
+    return {name:voice?voice.name:row.voiceId, pat, groupStarts, lines:seqGroupLineChunks(groupSlots)};
   });
 
-  let maxLineSteps=1;
-  rowsData.forEach(r=> r.lines.forEach(l=> maxLineSteps=Math.max(maxLineSteps, l.stepEnd-l.stepStart)));
-  const gridW=maxLineSteps*cellSize+(maxLineSteps-1)*cellGap;
-  const canvasW=Math.round(pad*2+labelW+gridW);
+  // A line's pixel width now depends on how many group breaks fall inside
+  // it, not just its step count, so measure each line directly rather than
+  // deriving width from a flat steps*cellPitch formula.
+  function lineWidthPx(r, line){
+    let w=0;
+    for(let i=line.stepStart;i<line.stepEnd;i++){
+      if(i>line.stepStart) w+=cellGap+(r.groupStarts.has(i)?groupGap:0);
+      w+=cellSize;
+    }
+    return w;
+  }
+
+  let maxLineW=1;
+  rowsData.forEach(r=> r.lines.forEach(l=> maxLineW=Math.max(maxLineW, lineWidthPx(r, l))));
+  const canvasW=Math.round(pad*2+labelW+maxLineW);
 
   let canvasH=pad*2;
   rowsData.forEach((r,ri)=>{
@@ -3037,14 +3053,15 @@ function seqBuildScreenshotCanvas(){
     ctx.fillText(r.name, pad, y+rowHeight/2, labelW-10);
     r.lines.forEach((line, li)=>{
       const lineY=y+li*(cellSize+lineGap);
+      let x=pad+labelW;
       for(let i=line.stepStart;i<line.stepEnd;i++){
-        const col=i-line.stepStart;
-        const x=pad+labelW+col*(cellSize+cellGap);
+        if(i>line.stepStart) x+=cellGap+(r.groupStarts.has(i)?groupGap:0);
         ctx.fillStyle=r.pat[i] ? onColor : offColor;
         ctx.fillRect(x, lineY, cellSize, cellSize);
         ctx.strokeStyle=borderColor;
         ctx.lineWidth=1;
         ctx.strokeRect(x+0.5, lineY+0.5, cellSize-1, cellSize-1);
+        x+=cellSize;
       }
     });
     y+=rowHeight+rowGap;
