@@ -1075,7 +1075,7 @@ function buildVoiceCard(voice){
 
   const head=document.createElement('div');
   head.className='voice-head';
-  head.title='Right-click to duplicate this instrument';
+  head.title='Right-click for options';
   const keyEl=document.createElement('span');
   keyEl.className='voice-key'; keyEl.textContent=voice.key||'•';
   const h3=document.createElement('h3'); h3.textContent=voice.name;
@@ -1083,7 +1083,10 @@ function buildVoiceCard(voice){
   head.addEventListener('contextmenu', (e)=>{
     e.preventDefault();
     e.stopPropagation();
-    const items=[{label:'Duplicate', onSelect:()=> duplicateVoice(voice.id)}];
+    const items=[
+      {label:'Rename', onSelect:()=> renameVoice(voice.id, h3)},
+      {label:'Duplicate', onSelect:()=> duplicateVoice(voice.id)}
+    ];
     if(voice.isClone){
       items.push({label:'Delete Instrument', danger:true, onSelect:()=> deleteVoiceClone(voice.id)});
     }
@@ -1147,6 +1150,25 @@ function renderVoices(){
     state.voices[voice.id]=initial;
     rack.appendChild(buildVoiceCard(voice));
   });
+}
+
+// Right-click a voice card's header to rename it in place. Works on the 9
+// stock voices too (not just clones) -- it's just the display name, not the
+// id, so nothing that keys off voice.id (patterns, params, the trigger
+// function) is affected. h3El is passed in so the card's own heading
+// updates immediately without a full re-render (which would drop mid-drag
+// slider state); the sequencer row using this voice is re-rendered
+// separately since its label is built fresh from voice.name each time.
+function renameVoice(voiceId, h3El){
+  const voice=VOICES.find(v=>v.id===voiceId);
+  if(!voice) return;
+  const next=prompt('Rename instrument', voice.name);
+  if(next===null) return; // cancelled
+  const trimmed=next.trim();
+  if(!trimmed || trimmed===voice.name) return;
+  voice.name=trimmed;
+  if(h3El) h3El.textContent=trimmed;
+  renderSequencer();
 }
 
 // Right-click a voice card's header (the badge/name row) to duplicate it.
