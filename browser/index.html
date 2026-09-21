@@ -1066,6 +1066,7 @@ canvas{
 'use strict';
 
 let ctx=null, master=null, analyser=null, noiseBuffer=null;
+let crashBuffer=null, click1Buffer=null, click2Buffer=null; // hardcoded sample buffers, baked once per engine start
 let ksNode=null, ksGain=null, ksReady=false;
 const pads={};
 const state={ voices:{} };
@@ -1101,6 +1102,85 @@ function makeSyntheticIR(ac, length, decay){
     }
   }
   return buf;
+}
+
+// A short, clean reference "signal" tone -- a decaying sine with a
+// millisecond noise transient at the very front for snap -- rendered once
+// into a fixed buffer instead of rebuilt from oscillator nodes on every
+// hit. Used for Click1/Click2: two hardcoded marker tones meant to stay a
+// stable, recognizable reference while a pattern is being laid out, not
+// a live-tunable synth voice.
+function makeSignalBuffer(ac, freq, decay, snap){
+  const attack=0.001;
+  const len=Math.ceil(ac.sampleRate*(decay+0.05));
+  const buf=ac.createBuffer(1, len, ac.sampleRate);
+  const d=buf.getChannelData(0);
+  const sr=ac.sampleRate;
+  const tau=decay/Math.log(10000); // amplitude ~ -80dB by t=decay
+  for(let i=0;i<len;i++){
+    const t=i/sr;
+    const env=(t<attack) ? (t/attack) : Math.exp(-(t-attack)/tau);
+    let s=Math.sin(2*Math.PI*freq*t)*env;
+    if(snap>0 && t<0.008){
+      s += (Math.random()*2-1)*snap*Math.exp(-t/0.003);
+    }
+    d[i]=s;
+  }
+  return buf;
+}
+
+// The crash cymbal's "big wash" is rendered ONCE into a fixed buffer via
+// an OfflineAudioContext -- literally hardcoding the sound sample -- using
+// the same modal-synthesis idea (a noise burst exciting a bank of
+// resonant bandpass "modes", denser and faster-decaying toward the top of
+// the spectrum, like a struck metal plate) the old live per-hit version
+// used, just rendered once so it can afford a much longer, denser wash
+// (22 modes over ~3s) than realtime per-note synthesis could reasonably
+// sustain every single hit. Playback (triggerCymbal below) just plays this
+// buffer back with a live level/length/brightness/pitch on top -- no live
+// oscillator or filter bank runs per hit any more.
+async function makeCrashBuffer(ac){
+  const dur=3.2;
+  const offline=new OfflineAudioContext(2, Math.ceil(ac.sampleRate*dur), ac.sampleRate);
+  const noiseBuf=offline.createBuffer(2, Math.floor(offline.sampleRate*dur), offline.sampleRate);
+  for(let ch=0; ch<2; ch++){
+    const d=noiseBuf.getChannelData(ch);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  const src=offline.createBufferSource();
+  src.buffer=noiseBuf;
+
+  const MODES=22;
+  const bus=offline.createGain();
+  // 22 unit-peak band-limited noise layers summed together can easily
+  // exceed +-1 at some instants (constructive overlap across bands) and
+  // clip -- baked permanently into the sample if left unchecked. Scale
+  // down by roughly 1/sqrt(MODES) for headroom; live "Level" on playback
+  // scales back up from there.
+  bus.gain.value=0.9/Math.sqrt(MODES);
+  bus.connect(offline.destination);
+  for(let i=0;i<MODES;i++){
+    const freq=900*Math.pow(9, i/(MODES-1)); // ~900Hz .. ~8.1kHz, log-spaced
+    const bp=offline.createBiquadFilter();
+    bp.type='bandpass'; bp.frequency.value=freq; bp.Q.value=6+Math.random()*10;
+    const decay=2.6/(1+(freq/900)*0.35); // higher modes ring out faster
+    const env=offline.createGain();
+    env.gain.setValueAtTime(0.0001, 0);
+    env.gain.exponentialRampToValueAtTime(1, 0.01);
+    env.gain.exponentialRampToValueAtTime(0.0001, decay);
+    src.connect(bp).connect(env).connect(bus);
+  }
+  // A broadband highpass shimmer layer for the initial attack/sizzle.
+  const hp=offline.createBiquadFilter();
+  hp.type='highpass'; hp.frequency.value=6000;
+  const hpEnv=offline.createGain();
+  hpEnv.gain.setValueAtTime(0.0001, 0);
+  hpEnv.gain.exponentialRampToValueAtTime(0.7, 0.008);
+  hpEnv.gain.exponentialRampToValueAtTime(0.0001, 1.4);
+  src.connect(hp).connect(hpEnv).connect(bus);
+
+  src.start(0);
+  return offline.startRendering();
 }
 
 function makeSaturationCurve(amount){
@@ -1235,36 +1315,35 @@ function triggerHihat(p, when){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
+// Plays back the hardcoded crash buffer (see makeCrashBuffer above) --
+// Level, Brightness and Pitch are live playback-time processing on top of
+// the fixed sample; Length just trims how much of the baked ~3.2s wash
+// plays before a quick fade, so it reads as choking the crash short vs
+// letting the whole wave ring out.
 function triggerCymbal(p, when){
+  if(!crashBuffer) return false; // still rendering (or the offline render failed)
   const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
-  const exciter=ctx.createBufferSource(); exciter.buffer=noiseBuffer;
-  const excEnv=ctx.createGain();
-  excEnv.gain.setValueAtTime(1, t0);
-  excEnv.gain.exponentialRampToValueAtTime(0.0001, t0+0.015);
-  exciter.connect(excEnv);
-  exciter.start(t0); exciter.stop(t0+0.05);
+  const src=ctx.createBufferSource();
+  src.buffer=crashBuffer;
+  src.playbackRate.value=p.pitch;
 
-  const modeCount=Math.round(p.modes);
-  const submix=ctx.createGain(); submix.gain.value=1/modeCount;
-  for(let i=0;i<modeCount;i++){
-    const ratio=1 + i*1.87 + (i%3)*0.41;
-    const freq=Math.min(p.baseFreq*ratio, ctx.sampleRate/2*0.9);
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq; bp.Q.value=25+i*3;
-    const modeDecay=p.decay/(1+(freq/p.baseFreq)*0.18);
-    const modeEnv=ctx.createGain();
-    modeEnv.gain.setValueAtTime(1, t0);
-    modeEnv.gain.exponentialRampToValueAtTime(0.0001, t0+modeDecay);
-    excEnv.connect(bp);
-    bp.connect(modeEnv);
-    modeEnv.connect(submix);
-  }
+  const brightness=ctx.createBiquadFilter();
+  brightness.type='highpass'; brightness.frequency.value=p.brightness;
 
-  const brightness=ctx.createBiquadFilter(); brightness.type='highpass'; brightness.frequency.value=p.brightness;
-  submix.connect(brightness).connect(bus);
+  const env=ctx.createGain();
+  const stopAt=t0+p.length;
+  env.gain.setValueAtTime(1, t0);
+  env.gain.setValueAtTime(1, Math.max(t0, stopAt-0.08));
+  env.gain.linearRampToValueAtTime(0.0001, stopAt);
 
-  setTimeout(()=>bus.disconnect(), (p.decay+0.3)*1000);
+  src.connect(brightness).connect(env).connect(bus);
+  src.start(t0);
+  src.stop(stopAt+0.05);
+
+  setTimeout(()=>bus.disconnect(), (p.length+0.3)*1000);
+  return true;
 }
 
 function triggerClap(p, when){
@@ -1365,30 +1444,25 @@ function triggerChaos(p, when){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
-function triggerClick(p, when){
+// Plays back one of the two hardcoded signal-tone buffers (see
+// makeSignalBuffer above). Click1/Click2 are meant to stay a fixed,
+// recognizable reference while a pattern is being laid out, so only
+// Level and Pitch (a live playbackRate multiplier) are exposed -- no live
+// decay/snap tuning, no oscillator or noise node runs per hit any more.
+function triggerClickBuffer(buffer, p, when){
+  if(!buffer) return false; // still rendering
   const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
-
-  const osc=ctx.createOscillator(); osc.type='sine';
-  osc.frequency.setValueAtTime(p.freq, t0);
-  const env=ctx.createGain();
-  env.gain.setValueAtTime(0.0001, t0);
-  env.gain.exponentialRampToValueAtTime(1, t0+0.001);
-  env.gain.exponentialRampToValueAtTime(0.0001, t0+p.decay);
-  osc.connect(env).connect(bus);
-  osc.start(t0); osc.stop(t0+p.decay+0.02);
-
-  if(p.snap>0){
-    const src=ctx.createBufferSource(); src.buffer=noiseBuffer;
-    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=p.freq*2;
-    const nEnv=ctx.createGain();
-    nEnv.gain.setValueAtTime(p.snap, t0);
-    nEnv.gain.exponentialRampToValueAtTime(0.0001, t0+0.008);
-    src.connect(hp).connect(nEnv).connect(bus);
-    src.start(t0); src.stop(t0+0.02);
-  }
-  setTimeout(()=>bus.disconnect(), (p.decay+0.1)*1000);
+  const src=ctx.createBufferSource();
+  src.buffer=buffer;
+  src.playbackRate.value=p.pitch;
+  src.connect(bus);
+  src.start(t0);
+  setTimeout(()=>bus.disconnect(), (buffer.duration/Math.max(0.1,p.pitch)+0.1)*1000);
+  return true;
 }
+function triggerClick1(p, when){ return triggerClickBuffer(click1Buffer, p, when); }
+function triggerClick2(p, when){ return triggerClickBuffer(click2Buffer, p, when); }
 
 /* ---------- voice registry ---------- */
 
@@ -1431,13 +1505,12 @@ const VOICES=[
   },
   {
     id:'cymbal', key:'4', name:'Cymbal', trigger:triggerCymbal,
-    theory:"Modal synthesis: a bank of parallel bandpass filters, each an independent resonant mode, excited by one short noise impulse. This is the physically-grounded alternative to the six-oscillator hi-hat trick -- each mode's decay time is set inversely to its frequency, matching a struck metal plate, where high-frequency bending waves lose energy faster than low ones. More modes and a higher base frequency push it from tom-like toward crash/ride shimmer.",
+    theory:"A big crashing wash, hardcoded: rendered ONCE into a fixed buffer via an OfflineAudioContext (see makeCrashBuffer) instead of rebuilt from a live filter bank on every hit. The render itself is still modal synthesis underneath -- a noise burst exciting 22 parallel resonant bandpass modes, log-spaced ~900Hz-8kHz, each ringing out faster the higher it sits (a struck metal plate's high partials always die first) -- but baking it once affords a much longer, denser wash (~3s) than realtime per-note synthesis could reasonably sustain on every hit. Level/Brightness/Pitch are live processing on top of that fixed sample; Length just trims how much of the wash plays before a fast fade.",
     params:[
-      {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.7,unit:''},
-      {id:'baseFreq',label:'Base Freq',min:150,max:500,step:1,value:300,unit:'Hz'},
-      {id:'modes',label:'Modes',min:4,max:20,step:1,value:12,unit:''},
-      {id:'decay',label:'Decay',min:0.3,max:4,step:0.05,value:1.8,unit:'s'},
-      {id:'brightness',label:'Brightness HP',min:1000,max:8000,step:10,value:3500,unit:'Hz'}
+      {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.75,unit:''},
+      {id:'length',label:'Length',min:0.2,max:3.2,step:0.05,value:2.2,unit:'s'},
+      {id:'brightness',label:'Brightness HP',min:200,max:6000,step:10,value:600,unit:'Hz'},
+      {id:'pitch',label:'Pitch',min:0.6,max:1.6,step:0.01,value:1.0,unit:''}
     ]
   },
   {
@@ -1497,23 +1570,19 @@ const VOICES=[
     ]
   },
   {
-    id:'click1', key:'', name:'Click1', trigger:triggerClick,
-    theory:"A millisecond-scale sine blip -- no pitch sweep, no resonant body, just an envelope and a touch of highpass-filtered noise for transient snap -- the same minimal recipe drum machines and metronomes use for count-in and click-track ticks. Click1/Click2 are the same circuit tuned to two different frequencies, like a hi/lo woodblock pair, so they read as distinct hits at a glance without needing a keyboard slot of their own.",
+    id:'click1', key:'', name:'Click1', trigger:triggerClick1,
+    theory:"A hardcoded reference signal tone, not a tunable synth voice: a millisecond-scale decaying sine plus a touch of noise transient for snap, rendered ONCE into a fixed buffer (see makeSignalBuffer) rather than rebuilt from oscillator nodes on every hit. The point of a click track is that it doesn't drift or change character while you're laying out a pattern against it, so only Level and Pitch (a live playback-rate retune of the fixed tone) are exposed. Click1 is the high signal of a hi/lo pair with Click2, meant to mark a beat the way a metronome accent would.",
     params:[
       {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.8,unit:''},
-      {id:'freq',label:'Freq',min:200,max:4000,step:10,value:1800,unit:'Hz'},
-      {id:'decay',label:'Decay',min:0.005,max:0.2,step:0.005,value:0.02,unit:'s'},
-      {id:'snap',label:'Snap',min:0,max:1,step:0.01,value:0.6,unit:''}
+      {id:'pitch',label:'Pitch',min:0.5,max:2.0,step:0.01,value:1.0,unit:''}
     ]
   },
   {
-    id:'click2', key:'', name:'Click2', trigger:triggerClick,
-    theory:"A millisecond-scale sine blip -- no pitch sweep, no resonant body, just an envelope and a touch of highpass-filtered noise for transient snap -- the same minimal recipe drum machines and metronomes use for count-in and click-track ticks. Click1/Click2 are the same circuit tuned to two different frequencies, like a hi/lo woodblock pair, so they read as distinct hits at a glance without needing a keyboard slot of their own.",
+    id:'click2', key:'', name:'Click2', trigger:triggerClick2,
+    theory:"A hardcoded reference signal tone, not a tunable synth voice: a millisecond-scale decaying sine plus a touch of noise transient for snap, rendered ONCE into a fixed buffer (see makeSignalBuffer) rather than rebuilt from oscillator nodes on every hit. The point of a click track is that it doesn't drift or change character while you're laying out a pattern against it, so only Level and Pitch (a live playback-rate retune of the fixed tone) are exposed. Click2 is the low signal of the hi/lo pair with Click1, meant to mark an off-beat or subdivision against Click1's accent.",
     params:[
       {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.8,unit:''},
-      {id:'freq',label:'Freq',min:200,max:4000,step:10,value:700,unit:'Hz'},
-      {id:'decay',label:'Decay',min:0.005,max:0.2,step:0.005,value:0.045,unit:'s'},
-      {id:'snap',label:'Snap',min:0,max:1,step:0.01,value:0.35,unit:''}
+      {id:'pitch',label:'Pitch',min:0.5,max:2.0,step:0.01,value:1.0,unit:''}
     ]
   }
 ];
@@ -1705,7 +1774,7 @@ function firePad(voice, padEl){
     setTimeout(()=>padEl.classList.remove('active'), 120);
   }
   if(ok===false){
-    showHint(voice.name+' unavailable: AudioWorklet failed to load in this browser.');
+    showHint(voice.name+' unavailable: still loading, or failed to load in this browser.');
   }
 }
 
@@ -3034,6 +3103,9 @@ engineBtn.addEventListener('click', async ()=>{
     master.connect(analyser);
     analyser.connect(ctx.destination);
     noiseBuffer=makeNoiseBuffer(ctx, 2);
+    click1Buffer=makeSignalBuffer(ctx, 1800, 0.02, 0.6);
+    click2Buffer=makeSignalBuffer(ctx, 700, 0.045, 0.35);
+    makeCrashBuffer(ctx).then(buf=>{ crashBuffer=buf; }).catch(err=>{ console.warn('Crash buffer render failed', err); });
     await setupKSWorklet();
     startVisualLoop();
   }
