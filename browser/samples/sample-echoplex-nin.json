@@ -1,0 +1,146 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "savedAt": "2026-09-21T20:38:21.657477Z",
+  "name": "Echoplex (NIN) - reverse-engineered sample",
+  "masterVolume": 0.3,
+  "sequencer": {
+    "bpm": 123,
+    "beatsPerMeasure": 4,
+    "groupSlots": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "rows": [
+      {
+        "id": "row0",
+        "voiceId": "kick",
+        "unlinked": false,
+        "volume": 100
+      },
+      {
+        "id": "row1",
+        "voiceId": "clap",
+        "unlinked": false,
+        "volume": 90
+      },
+      {
+        "id": "row2",
+        "voiceId": "snare",
+        "unlinked": false,
+        "volume": 50
+      },
+      {
+        "id": "row3",
+        "voiceId": "hihat",
+        "unlinked": false,
+        "volume": 55
+      },
+      {
+        "id": "row4",
+        "voiceId": "chaos",
+        "unlinked": false,
+        "volume": 45
+      }
+    ],
+    "pattern": {
+      "row0": [
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false
+      ],
+      "row1": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false
+      ],
+      "row2": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "row3": [
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false
+      ],
+      "row4": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
+  "textPatterns": {
+    "patterns": [],
+    "arrangement": []
+  },
+  "voices": []
+}

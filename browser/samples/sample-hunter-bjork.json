@@ -1,0 +1,146 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "savedAt": "2026-09-21T20:36:39.257131Z",
+  "name": "Hunter (Bjork) - reverse-engineered sample",
+  "masterVolume": 0.3,
+  "sequencer": {
+    "bpm": 80,
+    "beatsPerMeasure": 4,
+    "groupSlots": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "rows": [
+      {
+        "id": "row0",
+        "voiceId": "kick",
+        "unlinked": false,
+        "volume": 100
+      },
+      {
+        "id": "row1",
+        "voiceId": "snare",
+        "unlinked": false,
+        "volume": 90
+      },
+      {
+        "id": "row2",
+        "voiceId": "tom",
+        "unlinked": false,
+        "volume": 70
+      },
+      {
+        "id": "row3",
+        "voiceId": "cowbell",
+        "unlinked": false,
+        "volume": 55
+      },
+      {
+        "id": "row4",
+        "voiceId": "hihat",
+        "unlinked": false,
+        "volume": 40
+      }
+    ],
+    "pattern": {
+      "row0": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "row1": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ],
+      "row2": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "row3": [
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true
+      ],
+      "row4": [
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false
+      ]
+    }
+  },
+  "textPatterns": {
+    "patterns": [],
+    "arrangement": []
+  },
+  "voices": []
+}
