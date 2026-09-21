@@ -3107,8 +3107,9 @@ seqBeatsInc.addEventListener('click', ()=>{
 // :root values stay the zoom=1 baseline), so every dependent measurement
 // -- the grid itself, and the group-control boxes that are positioned by
 // reading the grid's actual rendered pixels -- picks the new size up for
-// free. Purely a view preference: it doesn't touch seq state and isn't
-// saved with the project.
+// free. A view preference, not seq data -- but saved with the project
+// (uiState, see collectProjectState/applyProjectState) since reopening a
+// project shouldn't reset how it looked.
 const sequencerEl=document.getElementById('sequencer');
 const seqZoomOut=document.getElementById('seqZoomOut');
 const seqZoomIn=document.getElementById('seqZoomIn');
@@ -3325,9 +3326,9 @@ seqScreenshotBtn.addEventListener('click', ()=>{
 // Hides every per-beat adjustment strip at once -- the shared global one and
 // each unlinked row's own inline copy -- so a project with several
 // independent rows doesn't force a slot-count/copy/paste strip under every
-// single one when you just want to look at (or play) the grid. Purely a
-// view preference, like zoom: it doesn't touch seq state and isn't saved
-// with the project.
+// single one when you just want to look at (or play) the grid. A view
+// preference, like zoom -- and like zoom, saved with the project as of
+// uiState (see collectProjectState/applyProjectState).
 const seqBarsToggleBtn=document.getElementById('seqBarsToggleBtn');
 let seqBarsHidden=false;
 function seqApplyBarsVisibility(){
@@ -4067,6 +4068,17 @@ function collectProjectState(){
       patterns:patternLib.patterns.map(p=>({id:p.id, label:p.label, pairs:p.pairs.map(pr=>({slots:pr.slots, repeat:pr.repeat}))})),
       arrangement:patternLib.arrangement.slice()
     },
+    // View-only prefs (zoom, which strips/panels are open) -- none of this
+    // touches seq/pattern data, but a project built at a comfortable zoom
+    // with the bars strip tucked away should reopen looking exactly like
+    // that, not reset back to Claude's own defaults every time.
+    uiState:{
+      zoom:seqZoom,
+      barsHidden:seqBarsHidden,
+      muteSoloShown:seqMuteSoloShown,
+      analysisExpanded:analysisExpanded,
+      patternsExpanded:patternsExpanded
+    },
     voices:VOICES.map(v=>({
       id:v.id,
       name:v.name,
@@ -4278,6 +4290,21 @@ function applyProjectState(data){
     masterVolVal.textContent=Math.round(data.masterVolume*100);
     if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
   }
+
+  // View-only prefs (zoom, Hide Bars, M/S strip, which panels are open). A
+  // file saved before this existed has no uiState at all -- for that case
+  // each one falls back to the same "fresh view" state a brand new project
+  // starts in, rather than leaving whatever the PREVIOUS project's view
+  // happened to be set to.
+  const ui=data.uiState||{};
+  seqZoom=(typeof ui.zoom==='number') ? Math.min(SEQ_ZOOM_MAX, Math.max(SEQ_ZOOM_MIN, ui.zoom)) : 1;
+  seqApplyZoom();
+  seqBarsHidden=!!ui.barsHidden;
+  seqApplyBarsVisibility();
+  seqMuteSoloShown=!!ui.muteSoloShown;
+  seqApplyMuteSoloVisibility();
+  setAnalysisExpanded(!!ui.analysisExpanded);
+  setPatternsExpanded(ui.patternsExpanded!==false);
 
   document.getElementById('projectNameInput').value=data.name || '';
 
