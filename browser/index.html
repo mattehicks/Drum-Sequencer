@@ -213,13 +213,19 @@ canvas{
 .step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
 .step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
 
-.seq-beats-ctrl{
+.seq-measure-ctrl{
   display:flex;
+  flex-wrap:wrap;
   align-items:center;
-  gap:8px;
+  gap:20px;
   margin-top:12px;
   padding-top:10px;
   border-top:1px solid var(--border);
+}
+.seq-ctrl-group{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
 .seq-beats-label{
   font-size:11px;
@@ -241,7 +247,7 @@ canvas{
 }
 .seq-beats-btn:hover{border-color:var(--accent);}
 .seq-beats-btn:disabled{opacity:0.35; cursor:default; border-color:var(--border); color:var(--subtext);}
-#seqBeatsVal{
+#seqBeatsVal, #seqSlotsVal{
   font-family:var(--mono);
   font-size:13px;
   font-weight:600;
@@ -429,11 +435,19 @@ canvas{
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
     </div>
     <div class="seq-body" id="seqBody"></div>
-    <div class="seq-beats-ctrl">
-      <span class="seq-beats-label">Beats / measure</span>
-      <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
-      <output id="seqBeatsVal" for="seqBody">4</output>
-      <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
+    <div class="seq-measure-ctrl">
+      <div class="seq-ctrl-group">
+        <span class="seq-beats-label">Beats / measure</span>
+        <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
+        <output id="seqBeatsVal" for="seqBody">4</output>
+        <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
+      </div>
+      <div class="seq-ctrl-group">
+        <span class="seq-beats-label">Slots / beat</span>
+        <button type="button" class="seq-beats-btn" id="seqSlotsDec" aria-label="Decrease slots per beat">&minus;</button>
+        <output id="seqSlotsVal" for="seqBody">4</output>
+        <button type="button" class="seq-beats-btn" id="seqSlotsInc" aria-label="Increase slots per beat">+</button>
+      </div>
     </div>
     <details class="theory">
       <summary>Theory</summary>
@@ -954,12 +968,12 @@ function firePad(voice, padEl){
 /* ---------- step sequencer ---------- */
 
 const SEQ_ROWS=['kick','snare','hihat','clap','tom'];
-const STEPS_PER_BEAT=4;
 let SEQ_STEPS=16;
 
 const seq={
   bpm:112,
   beatsPerMeasure:4,
+  slotsPerBeat:4,
   playing:false,
   pattern:{
     kick:  [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
@@ -977,7 +991,7 @@ let seqHighlightCol=-1;
 const SEQ_LOOKAHEAD_MS=25;
 const SEQ_SCHEDULE_AHEAD=0.12;
 
-function seqSecondsPerStep(){ return 60/seq.bpm/4; }
+function seqSecondsPerStep(){ return 60/seq.bpm/seq.slotsPerBeat; }
 
 function seqSetPlayheadColumn(col){
   if(seqHighlightCol>=0){
@@ -1033,10 +1047,11 @@ function seqStop(){
   seqPlayBtn.classList.remove('active');
 }
 
-function seqResize(newBeats){
+function seqResize(newBeats, newSlots){
   if(seq.playing) seqStop();
   seq.beatsPerMeasure=newBeats;
-  const newStepCount=newBeats*STEPS_PER_BEAT;
+  seq.slotsPerBeat=newSlots;
+  const newStepCount=newBeats*newSlots;
   SEQ_ROWS.forEach(id=>{
     const old=seq.pattern[id];
     const next=new Array(newStepCount).fill(false);
@@ -1046,7 +1061,7 @@ function seqResize(newBeats){
   SEQ_STEPS=newStepCount;
   seqCurrentStep=0;
   renderSequencer();
-  updateSeqBeatsUI();
+  updateSeqMeasureUI();
 }
 
 function renderSequencer(){
@@ -1073,7 +1088,7 @@ function renderSequencer(){
     for(let i=0;i<SEQ_STEPS;i++){
       const btn=document.createElement('button');
       btn.type='button';
-      btn.className='step'+(i%STEPS_PER_BEAT===0?' group-start':'');
+      btn.className='step'+(i%seq.slotsPerBeat===0?' group-start':'');
       btn.dataset.col=String(i);
       btn.dataset.voice=voiceId;
       if(seq.pattern[voiceId][i]) btn.classList.add('on');
@@ -1103,19 +1118,32 @@ seqTempoInput.addEventListener('input', ()=>{
 const seqBeatsDec=document.getElementById('seqBeatsDec');
 const seqBeatsInc=document.getElementById('seqBeatsInc');
 const seqBeatsVal=document.getElementById('seqBeatsVal');
+const seqSlotsDec=document.getElementById('seqSlotsDec');
+const seqSlotsInc=document.getElementById('seqSlotsInc');
+const seqSlotsVal=document.getElementById('seqSlotsVal');
 const SEQ_BEATS_MIN=2, SEQ_BEATS_MAX=12;
+const SEQ_SLOTS_MIN=1, SEQ_SLOTS_MAX=8;
 
-function updateSeqBeatsUI(){
+function updateSeqMeasureUI(){
   seqBeatsVal.textContent=String(seq.beatsPerMeasure);
   seqBeatsDec.disabled=seq.beatsPerMeasure<=SEQ_BEATS_MIN;
   seqBeatsInc.disabled=seq.beatsPerMeasure>=SEQ_BEATS_MAX;
+  seqSlotsVal.textContent=String(seq.slotsPerBeat);
+  seqSlotsDec.disabled=seq.slotsPerBeat<=SEQ_SLOTS_MIN;
+  seqSlotsInc.disabled=seq.slotsPerBeat>=SEQ_SLOTS_MAX;
 }
 
 seqBeatsDec.addEventListener('click', ()=>{
-  if(seq.beatsPerMeasure>SEQ_BEATS_MIN) seqResize(seq.beatsPerMeasure-1);
+  if(seq.beatsPerMeasure>SEQ_BEATS_MIN) seqResize(seq.beatsPerMeasure-1, seq.slotsPerBeat);
 });
 seqBeatsInc.addEventListener('click', ()=>{
-  if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqResize(seq.beatsPerMeasure+1);
+  if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqResize(seq.beatsPerMeasure+1, seq.slotsPerBeat);
+});
+seqSlotsDec.addEventListener('click', ()=>{
+  if(seq.slotsPerBeat>SEQ_SLOTS_MIN) seqResize(seq.beatsPerMeasure, seq.slotsPerBeat-1);
+});
+seqSlotsInc.addEventListener('click', ()=>{
+  if(seq.slotsPerBeat<SEQ_SLOTS_MAX) seqResize(seq.beatsPerMeasure, seq.slotsPerBeat+1);
 });
 seqClearBtn.addEventListener('click', ()=>{
   SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
@@ -1123,7 +1151,7 @@ seqClearBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('seqTheory').textContent=
-  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. Total step count = Beats x 4 -- the subdivision is fixed at 16th notes per beat, so 4 beats gives the original 16 steps, 3 gives 12 (3/4-style), 7 gives 28 (7/4-style), and so on. Changing Beats stops playback, resizes every row (keeping whatever steps still fit), and resets to step 1.";
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. Total step count = Beats/measure x Slots/beat -- BPM always means quarter notes per minute, and a step lasts (60/BPM)/Slots seconds, so 4 beats x 4 slots is the original 16-step 16th-note grid, 4 x 3 gives 12 steps of triplet feel, 7 x 2 gives a 7/8-style 14-step grid, and so on. Changing either control stops playback, resizes every row (keeping whatever steps still fit), and resets to step 1.";
 
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
@@ -1308,7 +1336,7 @@ window.addEventListener('keydown', (e)=>{
 
 renderVoices();
 renderSequencer();
-updateSeqBeatsUI();
+updateSeqMeasureUI();
 
 })();
 </script>
