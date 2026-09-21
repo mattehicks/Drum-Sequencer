@@ -1151,6 +1151,7 @@ canvas{
       </div>
       <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Hide the per-beat slot-count/copy/paste strips (the shared one and every row's own) to save vertical space">Hide Bars</button>
       <button type="button" class="seq-clear seq-mutesolo-toggle" id="seqMuteSoloToggleBtn" aria-pressed="false" title="Show a Mute / Solo strip under every row">M/S</button>
+      <button type="button" class="seq-clear" id="seqScreenshotBtn" title="Save a JPG image of just the instrument rows and step cells">Screenshot</button>
     </div>
     <div class="seq-body" id="seqBody">
       <div id="seqRows"></div>
@@ -2962,6 +2963,98 @@ seqZoomIn.addEventListener('click', ()=>{
 seqClearBtn.addEventListener('click', ()=>{
   seq.rows.forEach(row=> seq.pattern[row.id].fill(false));
   document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+});
+
+// ---- screenshot export ----
+// A plain JPG of just the instrument rows and their step cells -- no
+// toolbar, per-beat controls, mute/solo strip, or anything else -- drawn
+// fresh on an offscreen canvas rather than captured from the live DOM, so
+// it's a couple of shapes and some text instead of a screen-grab dependency.
+// Mirrors the same auto-stacking (seqGroupLineChunks) the grid itself is
+// currently using, so a long, wrapped measure comes out wrapped the same
+// way in the image.
+function seqBuildScreenshotCanvas(){
+  if(!seq.rows.length) return null;
+  const cellSize=28, cellGap=3, lineGap=8, rowGap=16, labelW=150, pad=18;
+  const cs=getComputedStyle(sequencerEl);
+  const bg=(cs.getPropertyValue('--panel')||'#1b1d23').trim()||'#1b1d23';
+  const onColor=(cs.getPropertyValue('--accent')||'#ff8a3d').trim()||'#ff8a3d';
+  const offColor=(cs.getPropertyValue('--panel-2')||'#22252c').trim()||'#22252c';
+  const borderColor=(cs.getPropertyValue('--border')||'#33363f').trim()||'#33363f';
+  const textColor=(cs.getPropertyValue('--text')||'#eae6df').trim()||'#eae6df';
+  const monoFont=(cs.getPropertyValue('--mono')||'monospace').trim()||'monospace';
+
+  const rowsData=seq.rows.map(row=>{
+    const voice=VOICES.find(v=>v.id===row.voiceId);
+    const groupSlots=rowGroupSlots(row);
+    const pat=seq.pattern[row.id]||[];
+    return {name:voice?voice.name:row.voiceId, pat, lines:seqGroupLineChunks(groupSlots)};
+  });
+
+  let maxLineSteps=1;
+  rowsData.forEach(r=> r.lines.forEach(l=> maxLineSteps=Math.max(maxLineSteps, l.stepEnd-l.stepStart)));
+  const gridW=maxLineSteps*cellSize+(maxLineSteps-1)*cellGap;
+  const canvasW=Math.round(pad*2+labelW+gridW);
+
+  let canvasH=pad*2;
+  rowsData.forEach((r,ri)=>{
+    canvasH += r.lines.length*cellSize+(r.lines.length-1)*lineGap;
+    if(ri<rowsData.length-1) canvasH+=rowGap;
+  });
+
+  const canvas=document.createElement('canvas');
+  canvas.width=canvasW;
+  canvas.height=Math.round(canvasH);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font='600 12px '+monoFont;
+  ctx.textBaseline='middle';
+
+  let y=pad;
+  rowsData.forEach(r=>{
+    const rowHeight=r.lines.length*cellSize+(r.lines.length-1)*lineGap;
+    ctx.fillStyle=textColor;
+    ctx.fillText(r.name, pad, y+rowHeight/2, labelW-10);
+    r.lines.forEach((line, li)=>{
+      const lineY=y+li*(cellSize+lineGap);
+      for(let i=line.stepStart;i<line.stepEnd;i++){
+        const col=i-line.stepStart;
+        const x=pad+labelW+col*(cellSize+cellGap);
+        ctx.fillStyle=r.pat[i] ? onColor : offColor;
+        ctx.fillRect(x, lineY, cellSize, cellSize);
+        ctx.strokeStyle=borderColor;
+        ctx.lineWidth=1;
+        ctx.strokeRect(x+0.5, lineY+0.5, cellSize-1, cellSize-1);
+      }
+    });
+    y+=rowHeight+rowGap;
+  });
+
+  return canvas;
+}
+
+const seqScreenshotBtn=document.getElementById('seqScreenshotBtn');
+seqScreenshotBtn.addEventListener('click', ()=>{
+  const canvas=seqBuildScreenshotCanvas();
+  if(!canvas){ showHint('Nothing to screenshot yet.'); return; }
+  canvas.toBlob((blob)=>{
+    if(!blob){ showHint('Could not generate the screenshot.'); return; }
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    const nameInput=document.getElementById('projectNameInput');
+    const rawName=nameInput ? nameInput.value.trim() : '';
+    const safeName=rawName ? rawName.replace(/[\\/:*?"<>|]/g,'').trim() : '';
+    const filename=(safeName || 'd20-synth-sequencer')+'-'+stamp+'.jpg';
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showHint('Screenshot saved.');
+  }, 'image/jpeg', 0.92);
 });
 
 // Hides every per-beat adjustment strip at once -- the shared global one and
