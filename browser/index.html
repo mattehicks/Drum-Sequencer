@@ -11,11 +11,20 @@
   --accent-2:#52d7c4;
   --copy-pink:#ff4fa3;
   --paste-green:#3ddc6a;
-  /* Fixed step-cell geometry for the sequencer grid: cell size never changes
-     with beat/slot count, so rows only ever grow wider (scroll), not taller
-     or denser. Keep these three numbers in sync with SEQ_CELL/SEQ_GAP/
-     SEQ_GROUP_GAP in the sequencer JS below -- both sides read the same
-     layout math so the per-measure controls line up under the grid. */
+  /* RGB triples of the four accent colors above, for rgba(var(--x-rgb),a)
+     glass tints -- keep these in sync with the hex values by hand, there's
+     no CSS color-to-rgb() cast available here. */
+  --accent-rgb:255,138,61;
+  --accent-2-rgb:82,215,196;
+  --copy-pink-rgb:255,79,163;
+  --paste-green-rgb:61,220,106;
+  --glass-rgb:255,255,255; /* per-button override; see the glassmorphism block below */
+  /* Base step-cell geometry for the sequencer grid at 100% zoom -- rows only
+     ever grow wider (scroll), not taller or denser, as slot/beat count
+     changes. The Zoom control in the sequencer header scales these three by
+     a runtime multiplier via inline custom-property overrides on #sequencer
+     (see seqApplyZoom() in the sequencer JS below); these :root values are
+     just the zoom=1 baseline. */
   --seq-cell:48px;
   --seq-gap:4px;
   --seq-group-gap:8px;
@@ -86,33 +95,86 @@ body{
 }
 .master{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
 .file-ctrl{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+/* ---------- glassmorphism button treatment ---------- */
+/* Shared "frosted glass" material for the app's clickable controls: a
+   blurred, translucent panel tinted by --glass-rgb (an R,G,B triple set
+   per class below), a soft diagonal sheen streaked across the top-left via
+   ::before to read as a glossy top layer, and an inset highlight/shadow
+   pair so the color reads as glowing up FROM BEHIND the glass rather than
+   a flat fill. Hover/active states raise the tint's alpha and glow instead
+   of swapping to a solid color, so the glass quality holds at every state
+   -- see each class's own :hover/.active rule below for that.
+   Each participating class keeps its own font/size/padding/shape; only
+   background/border/shadow are centralized here. */
+.file-btn, .engine-btn, .seq-play, .seq-clear, .seq-add-row, .seq-beats-btn,
+.seq-copy-btn, .seq-paste-btn, .seq-flag-btn, .pattern-pair-add,
+.arrange-pill, .pad{
+  position:relative;
+  overflow:hidden;
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--glass-rgb),0.22), rgba(var(--glass-rgb),0.08));
+  border:1px solid rgba(var(--glass-rgb),0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 -10px 16px rgba(0,0,0,0.3),
+    0 0 10px rgba(var(--glass-rgb),0.18);
+  transition:box-shadow 120ms, border-color 120ms, background 120ms, color 120ms;
+}
+.file-btn::before, .engine-btn::before, .seq-play::before, .seq-clear::before, .seq-add-row::before, .seq-beats-btn::before,
+.seq-copy-btn::before, .seq-paste-btn::before, .seq-flag-btn::before, .pattern-pair-add::before,
+.arrange-pill::before, .pad::before{
+  content:'';
+  position:absolute;
+  top:-90%; left:-30%;
+  width:45%; height:280%;
+  background:linear-gradient(120deg, rgba(255,255,255,0.38), rgba(255,255,255,0) 70%);
+  transform:rotate(18deg);
+  pointer-events:none;
+}
+
 .file-btn{
+  --glass-rgb:var(--accent-2-rgb);
   font-family:var(--mono);
   font-size:12px;
   font-weight:600;
-  background:var(--panel-2);
   color:var(--text);
-  border:1px solid var(--border);
   padding:8px 14px;
   border-radius:6px;
   cursor:pointer;
 }
-.file-btn:hover{border-color:var(--accent-2); color:var(--accent-2);}
+.file-btn:hover{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 16px rgba(0,0,0,0.26), 0 0 16px rgba(var(--accent-2-rgb),0.32);
+}
 .engine-btn{
+  --glass-rgb:var(--accent-2-rgb);
   font-family:var(--mono);
   font-size:13px;
   font-weight:600;
   letter-spacing:0.3px;
-  background:var(--panel-2);
   color:var(--text);
-  border:1px solid var(--border);
   padding:10px 16px;
   border-radius:6px;
   cursor:pointer;
 }
-.engine-btn:hover{border-color:var(--accent);}
+.engine-btn:hover{
+  border-color:rgba(var(--accent-rgb),0.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 16px rgba(0,0,0,0.26), 0 0 16px rgba(var(--accent-rgb),0.3);
+}
 .engine-btn:focus-visible{outline:2px solid var(--accent-2);}
-.engine-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
+.engine-btn.active{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -10px 16px rgba(0,0,0,0.22), 0 0 22px rgba(var(--accent-2-rgb),0.5);
+}
 #engineStatus{
   font-family:var(--mono);
   font-size:12px;
@@ -213,30 +275,42 @@ canvas{
   margin-bottom:12px;
 }
 .seq-play{
+  --glass-rgb:var(--accent-rgb);
   font-family:var(--mono);
   font-size:12px;
   font-weight:700;
   letter-spacing:0.5px;
-  background:var(--panel-2);
   color:var(--accent);
-  border:1px solid var(--border);
   padding:9px 14px;
   border-radius:6px;
   cursor:pointer;
 }
-.seq-play:hover{border-color:var(--accent);}
-.seq-play.active{background:var(--accent); color:var(--bg);}
+.seq-play:hover{
+  border-color:rgba(var(--accent-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 16px rgba(0,0,0,0.26), 0 0 16px rgba(var(--accent-rgb),0.32);
+}
+.seq-play.active{
+  color:var(--accent);
+  border-color:rgba(var(--accent-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-rgb),0.42), rgba(var(--accent-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -10px 16px rgba(0,0,0,0.22), 0 0 22px rgba(var(--accent-rgb),0.5);
+}
 .seq-clear{
+  --glass-rgb:154,150,145;
   font-family:var(--mono);
   font-size:11px;
-  background:transparent;
   color:var(--subtext);
-  border:1px solid var(--border);
   padding:8px 12px;
   border-radius:6px;
   cursor:pointer;
 }
-.seq-clear:hover{color:var(--text); border-color:var(--accent-2);}
+.seq-clear:hover{
+  color:var(--text);
+  border-color:rgba(var(--accent-2-rgb),0.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -10px 16px rgba(0,0,0,0.28), 0 0 14px rgba(var(--accent-2-rgb),0.28);
+}
 .seq-tempo{
   display:flex; align-items:center; gap:8px;
   font-size:12px; color:var(--subtext);
@@ -289,17 +363,20 @@ canvas{
   outline-offset:1px;
 }
 .seq-add-row{
+  --glass-rgb:var(--accent-2-rgb);
   margin-top:10px;
   font-family:var(--mono);
   font-size:11px;
-  background:transparent;
   color:var(--subtext);
-  border:1px dashed var(--border);
   padding:7px 12px;
   border-radius:6px;
   cursor:pointer;
 }
-.seq-add-row:hover{color:var(--accent-2); border-color:var(--accent-2);}
+.seq-add-row:hover{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -10px 16px rgba(0,0,0,0.28), 0 0 14px rgba(var(--accent-2-rgb),0.3);
+}
 .seq-cells{
   flex:none;
   display:grid;
@@ -334,21 +411,31 @@ canvas{
   margin-right:2px;
 }
 .seq-beats-btn{
+  --glass-rgb:var(--accent-rgb);
   width:26px; height:26px;
   padding:0;
   font-family:var(--mono);
   font-size:15px;
   line-height:1;
   font-weight:700;
-  background:var(--panel-2);
   color:var(--accent);
-  border:1px solid var(--border);
   border-radius:6px;
   cursor:pointer;
 }
-.seq-beats-btn:hover{border-color:var(--accent);}
-.seq-beats-btn:disabled{opacity:0.35; cursor:default; border-color:var(--border); color:var(--subtext);}
-#seqBeatsVal, .seq-group-ctrl output{
+.seq-beats-btn:hover{
+  border-color:rgba(var(--accent-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -6px 10px rgba(0,0,0,0.28), 0 0 10px rgba(var(--accent-rgb),0.3);
+}
+.seq-beats-btn:disabled{
+  opacity:0.35; cursor:default;
+  border-color:var(--border);
+  color:var(--subtext);
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  background:var(--panel-2);
+}
+#seqBeatsVal, #seqZoomVal, .seq-group-ctrl output{
   font-family:var(--mono);
   font-size:13px;
   font-weight:600;
@@ -385,20 +472,40 @@ canvas{
   line-height:1;
   border-radius:5px;
   cursor:pointer;
-  background:transparent;
 }
 .seq-copy-btn{
-  border:1px solid var(--copy-pink);
+  --glass-rgb:var(--copy-pink-rgb);
   color:var(--copy-pink);
 }
-.seq-copy-btn:hover{background:var(--copy-pink); color:var(--bg);}
-.seq-copy-btn.active{background:var(--copy-pink); color:var(--bg);}
+.seq-copy-btn:hover, .seq-copy-btn.active{
+  color:var(--copy-pink);
+  border-color:rgba(var(--copy-pink-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--copy-pink-rgb),0.4), rgba(var(--copy-pink-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--copy-pink-rgb),0.45);
+}
 .seq-paste-btn{
-  border:1px solid var(--paste-green);
+  --glass-rgb:var(--paste-green-rgb);
   color:var(--paste-green);
 }
-.seq-paste-btn:hover:not(:disabled){background:var(--paste-green); color:var(--bg);}
-.seq-paste-btn:disabled{opacity:0.3; cursor:default; border-color:var(--border); color:var(--subtext);}
+.seq-paste-btn:hover:not(:disabled){
+  color:var(--paste-green);
+  border-color:rgba(var(--paste-green-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--paste-green-rgb),0.4), rgba(var(--paste-green-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--paste-green-rgb),0.45);
+}
+.seq-paste-btn:disabled{
+  opacity:0.3; cursor:default;
+  border-color:var(--border);
+  color:var(--subtext);
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  background:transparent;
+}
 .seq-group-label{
   font-size:10px;
   font-family:var(--mono);
@@ -410,13 +517,12 @@ canvas{
 .seq-row-block + .seq-row-block{margin-top:14px;}
 .seq-row-flags{display:flex; align-items:center; gap:4px;}
 .seq-flag-btn{
+  --glass-rgb:154,150,145;
   font-family:var(--mono);
   font-size:9px;
   font-weight:700;
   letter-spacing:0.3px;
-  background:transparent;
   color:var(--subtext);
-  border:1px solid var(--border);
   padding:2px 5px;
   border-radius:4px;
   cursor:pointer;
@@ -424,9 +530,23 @@ canvas{
   white-space:nowrap;
   flex:none;
 }
-.seq-flag-btn:hover{border-color:var(--accent-2); color:var(--accent-2);}
-.seq-flag-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
-.seq-flag-btn.mode-btn.active{background:var(--copy-pink); border-color:var(--copy-pink); color:var(--bg);}
+.seq-flag-btn:hover{border-color:rgba(var(--accent-2-rgb),0.6); color:var(--accent-2);}
+.seq-flag-btn.active{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--accent-2-rgb),0.4);
+}
+.seq-flag-btn.mode-btn.active{
+  color:var(--copy-pink);
+  border-color:rgba(var(--copy-pink-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--copy-pink-rgb),0.4), rgba(var(--copy-pink-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--copy-pink-rgb),0.4);
+}
 
 .patterns{
   background:var(--panel);
@@ -497,17 +617,20 @@ canvas{
 }
 .pattern-pair-remove:hover{color:#ff6b6b;}
 .pattern-pair-add{
+  --glass-rgb:var(--accent-2-rgb);
   width:22px; height:22px;
   border-radius:6px;
-  border:1px dashed var(--border);
-  background:transparent;
   color:var(--subtext);
   cursor:pointer;
   font-size:13px;
   line-height:1;
   padding:0;
 }
-.pattern-pair-add:hover{color:var(--accent-2); border-color:var(--accent-2);}
+.pattern-pair-add:hover{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -6px 10px rgba(0,0,0,0.28), 0 0 10px rgba(var(--accent-2-rgb),0.3);
+}
 .pattern-preview{
   flex:1 1 100%;
   font-family:var(--mono);
@@ -519,17 +642,19 @@ canvas{
 .arrangement-block{margin-top:16px; padding-top:14px; border-top:1px solid var(--border);}
 .arrangement-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
 .arrange-pill{
+  --glass-rgb:var(--accent-2-rgb);
   font-family:var(--mono);
   font-size:12px;
   font-weight:700;
-  background:var(--panel-2);
   color:var(--accent-2);
-  border:1px solid var(--border);
   border-radius:14px;
   padding:6px 14px;
   cursor:pointer;
 }
-.arrange-pill:hover{border-color:var(--accent-2);}
+.arrange-pill:hover{
+  border-color:rgba(var(--accent-2-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 16px rgba(0,0,0,0.26), 0 0 14px rgba(var(--accent-2-rgb),0.3);
+}
 .arrangement-preview{
   margin-top:10px;
   font-family:var(--mono);
@@ -657,24 +782,30 @@ canvas{
 .context-menu-item.danger:hover:not(:disabled){background:rgba(255,90,90,0.14);}
 .context-menu-item:disabled{opacity:0.35; cursor:default;}
 .pad{
+  --glass-rgb:var(--accent-rgb);
   width:100%;
   padding:12px;
   font-family:var(--mono);
   font-size:12px;
   font-weight:700;
   letter-spacing:1px;
-  background:var(--panel-2);
-  border:1px solid var(--border);
   border-radius:6px;
   color:var(--accent);
   cursor:pointer;
-  transition:background 60ms, transform 60ms, color 60ms;
+  transition:background 80ms, box-shadow 80ms, border-color 80ms, transform 60ms, color 80ms;
 }
-.pad:hover{border-color:var(--accent);}
+.pad:hover{
+  border-color:rgba(var(--accent-rgb),0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -10px 16px rgba(0,0,0,0.3), 0 0 14px rgba(var(--accent-rgb),0.3);
+}
 .pad:focus-visible{outline:2px solid var(--accent-2);}
 .pad.active{
-  background:var(--accent);
-  color:var(--bg);
+  color:var(--accent);
+  border-color:rgba(var(--accent-rgb),0.85);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-rgb),0.46), rgba(var(--accent-rgb),0.2));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -10px 16px rgba(0,0,0,0.2), 0 0 22px rgba(var(--accent-rgb),0.55);
   transform:scale(0.98);
 }
 .voice-params{display:flex; flex-direction:column; gap:8px;}
@@ -820,6 +951,12 @@ canvas{
         <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
         <output id="seqBeatsVal" for="seqBody">4</output>
         <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
+      </div>
+      <div class="seq-ctrl-group">
+        <span class="seq-beats-label">Zoom</span>
+        <button type="button" class="seq-beats-btn" id="seqZoomOut" aria-label="Zoom out the sequencer grid">&minus;</button>
+        <output id="seqZoomVal" for="seqBody">100%</output>
+        <button type="button" class="seq-beats-btn" id="seqZoomIn" aria-label="Zoom in the sequencer grid">+</button>
       </div>
     </div>
     <div class="seq-body" id="seqBody">
@@ -2115,6 +2252,46 @@ seqBeatsDec.addEventListener('click', ()=>{
 seqBeatsInc.addEventListener('click', ()=>{
   if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqSetGroupCount(seq.beatsPerMeasure+1);
 });
+
+// ---- zoom: scales the step-cell geometry, not the data ----
+// Overrides --seq-cell/--seq-gap/--seq-group-gap on #sequencer only (the
+// :root values stay the zoom=1 baseline), so every dependent measurement
+// -- the grid itself, and the group-control boxes that are positioned by
+// reading the grid's actual rendered pixels -- picks the new size up for
+// free. Purely a view preference: it doesn't touch seq state and isn't
+// saved with the project.
+const sequencerEl=document.getElementById('sequencer');
+const seqZoomOut=document.getElementById('seqZoomOut');
+const seqZoomIn=document.getElementById('seqZoomIn');
+const seqZoomVal=document.getElementById('seqZoomVal');
+const SEQ_ZOOM_MIN=0.5, SEQ_ZOOM_MAX=2.0, SEQ_ZOOM_STEP=0.1;
+const SEQ_BASE_CELL=48, SEQ_BASE_GAP=4, SEQ_BASE_GROUP_GAP=8;
+let seqZoom=1;
+
+function seqApplyZoom(){
+  sequencerEl.style.setProperty('--seq-cell', Math.round(SEQ_BASE_CELL*seqZoom)+'px');
+  sequencerEl.style.setProperty('--seq-gap', Math.max(2, Math.round(SEQ_BASE_GAP*seqZoom))+'px');
+  sequencerEl.style.setProperty('--seq-group-gap', Math.max(3, Math.round(SEQ_BASE_GROUP_GAP*seqZoom))+'px');
+  seqZoomVal.textContent=Math.round(seqZoom*100)+'%';
+  seqZoomOut.disabled=seqZoom<=SEQ_ZOOM_MIN+1e-9;
+  seqZoomIn.disabled=seqZoom>=SEQ_ZOOM_MAX-1e-9;
+  // The grid just resized -- every group-control box (global strip + each
+  // unlinked row's own inline strip) needs repositioning against the new
+  // pixel geometry, exactly as after any other grid change.
+  positionGroupControls();
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) positionRowControls(row);
+  });
+}
+
+seqZoomOut.addEventListener('click', ()=>{
+  seqZoom=Math.max(SEQ_ZOOM_MIN, +(seqZoom-SEQ_ZOOM_STEP).toFixed(2));
+  seqApplyZoom();
+});
+seqZoomIn.addEventListener('click', ()=>{
+  seqZoom=Math.min(SEQ_ZOOM_MAX, +(seqZoom+SEQ_ZOOM_STEP).toFixed(2));
+  seqApplyZoom();
+});
 seqClearBtn.addEventListener('click', ()=>{
   seq.rows.forEach(row=> seq.pattern[row.id].fill(false));
   document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
@@ -2994,6 +3171,7 @@ window.addEventListener('keydown', (e)=>{
 renderVoices();
 renderSequencer();
 updateSeqMeasureUI();
+seqApplyZoom();
 renderPatternsSection();
 
 })();
