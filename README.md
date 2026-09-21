@@ -1,9 +1,18 @@
 # D20 Synth Tools
 
-D20 drum/percussion synthesis experiments. Standalone from the
-D20 firmware itself (ESP32 is already loaded with platform + drumset-loading duties) --
-this is where synthesis algorithms and tooling get prototyped and learned before any
-hardware integration decision is made.
+Introducing a single-file Web Audio API tool with nine drum/percussion voices (kick, snare, hi-hat, cymbal, clap, cowbell, tom, Karplus-Strong pluck via AudioWorklet, chaos-map percussion), each with live parameter controls and an inline "Theory" panel explaining the algorithm and math.
+
+Includes an oscilloscope, a log-frequency spectrum analyzer, and a scrolling spectrogram, all reading off the master bus. Open the file directly in a browser (Chrome/Edge recommended for full AudioWorklet support) -- no build step, no dependencies, no server required.
+
+Every voice follows the same three-stage structure used in analog drum synthesis
+
+Able to synthesize and save custom sounds (not just percussion).
+
+Able to create and save bars/time patterns, "A":  7-7-5-7-2-3-7  etc,  "B"  5-5-5-3
+
+Then create arrangements from those.   AA B A BA C BB  AA, etc.
+
+Manual editing functions:  beats/measures, and sound editing. Polyrhythmic track stacking, with sync and loop, for custom timing alignment.
 
 ## base1
 <img width="1102" height="1560" alt="D20 Synth Workbench" src="https://github.com/user-attachments/assets/6b336765-03a3-4cee-bca2-8414162425ed" />
