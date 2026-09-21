@@ -11,6 +11,16 @@
   --accent-2:#52d7c4;
   --copy-pink:#ff4fa3;
   --paste-green:#3ddc6a;
+  /* Fixed step-cell geometry for the sequencer grid: cell size never changes
+     with beat/slot count, so rows only ever grow wider (scroll), not taller
+     or denser. Keep these three numbers in sync with SEQ_CELL/SEQ_GAP/
+     SEQ_GROUP_GAP in the sequencer JS below -- both sides read the same
+     layout math so the per-measure controls line up under the grid. */
+  --seq-cell:48px;
+  --seq-gap:4px;
+  --seq-group-gap:8px;
+  --seq-label-w:64px;
+  --seq-row-gap:10px;
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans:'Barlow', system-ui, -apple-system, sans-serif;
 }
@@ -176,17 +186,17 @@ canvas{
 }
 .seq-tempo input{width:120px;}
 .seq-tempo output{color:var(--text); min-width:56px; display:inline-block;}
-.seq-body{overflow-x:auto; padding-bottom:2px;}
+.seq-body{overflow-x:auto; padding-bottom:2px; position:relative;}
 .seq-row{
   display:flex;
   align-items:center;
-  gap:10px;
-  min-width:520px;
+  gap:var(--seq-row-gap);
+  width:max-content;
 }
 .seq-row + .seq-row{margin-top:6px;}
 .seq-row-label{
   flex:none;
-  width:64px;
+  width:var(--seq-label-w);
   display:flex;
   align-items:center;
   gap:6px;
@@ -195,12 +205,14 @@ canvas{
   font-family:var(--mono);
 }
 .seq-cells{
-  flex:1;
+  flex:none;
   display:grid;
-  grid-template-columns:repeat(16, minmax(22px,1fr));
-  gap:4px;
+  grid-auto-flow:column;
+  grid-auto-columns:var(--seq-cell);
+  gap:var(--seq-gap);
 }
 .step{
+  width:var(--seq-cell);
   aspect-ratio:1;
   padding:0;
   border-radius:6px;
@@ -210,7 +222,7 @@ canvas{
   transition:background 80ms, box-shadow 80ms;
 }
 .step:hover{border-color:var(--accent);}
-.step.group-start:not(:first-child){margin-left:8px;}
+.step.group-start:not(:first-child){margin-left:var(--seq-group-gap);}
 .step.on{background:var(--accent); border-color:var(--accent);}
 .step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
 .step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
@@ -250,19 +262,24 @@ canvas{
 }
 
 .seq-group-ctrls{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
+  position:relative;
+  height:26px;
   margin-top:10px;
 }
 .seq-group-ctrl{
+  position:absolute;
+  top:0;
+  height:100%;
   display:flex;
   align-items:center;
-  gap:6px;
+  justify-content:center;
+  gap:5px;
   background:var(--panel-2);
   border:1px solid var(--border);
   border-radius:6px;
-  padding:4px 6px;
+  padding:0 5px;
+  white-space:nowrap;
+  box-sizing:border-box;
 }
 .seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px;}
 .seq-copy-btn, .seq-paste-btn{
@@ -477,8 +494,10 @@ canvas{
         <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
       </div>
     </div>
-    <div class="seq-body" id="seqBody"></div>
-    <div class="seq-group-ctrls" id="seqGroupCtrls"></div>
+    <div class="seq-body" id="seqBody">
+      <div id="seqRows"></div>
+      <div class="seq-group-ctrls" id="seqGroupCtrls"></div>
+    </div>
     <details class="theory">
       <summary>Theory</summary>
       <p id="seqTheory"></p>
@@ -1138,6 +1157,7 @@ function seqCopyGroup(groupIndex){
   SEQ_ROWS.forEach(id=>{ pattern[id]=seq.pattern[id].slice(start, start+count); });
   seqClipboard={slotCount:count, pattern, sourceGroup:groupIndex};
   renderGroupControls();
+  positionGroupControls();
 }
 
 function seqPasteGroup(groupIndex){
@@ -1158,14 +1178,13 @@ function seqPasteGroup(groupIndex){
 }
 
 function renderSequencer(){
-  const body=document.getElementById('seqBody');
+  const body=document.getElementById('seqRows');
   body.innerHTML='';
   const groupStarts=new Set(seqGroupBoundaries(seq.groupSlots));
   SEQ_ROWS.forEach(voiceId=>{
     const voice=VOICES.find(v=>v.id===voiceId);
     const row=document.createElement('div');
     row.className='seq-row';
-    row.style.minWidth=Math.max(320, 90+SEQ_STEPS*26)+'px';
 
     const label=document.createElement('span');
     label.className='seq-row-label';
@@ -1178,7 +1197,6 @@ function renderSequencer(){
 
     const cells=document.createElement('div');
     cells.className='seq-cells';
-    cells.style.gridTemplateColumns='repeat('+SEQ_STEPS+', minmax(22px,1fr))';
     for(let i=0;i<SEQ_STEPS;i++){
       const btn=document.createElement('button');
       btn.type='button';
@@ -1197,6 +1215,31 @@ function renderSequencer(){
     body.appendChild(row);
   });
   renderGroupControls();
+  positionGroupControls();
+}
+
+// Group-control boxes are centered under the exact step columns they
+// control by measuring the actual rendered grid (not by recomputing cell/
+// gap math by hand), so they stay correct across the responsive breakpoint
+// and any future CSS tweak. Runs after both the grid and the control boxes
+// exist in the DOM.
+function positionGroupControls(){
+  const wrap=document.getElementById('seqGroupCtrls');
+  const firstRow=document.querySelector('#seqRows .seq-row');
+  if(!firstRow) return;
+  const wrapRect=wrap.getBoundingClientRect();
+  const bounds=seqGroupBoundaries(seq.groupSlots);
+  Array.from(wrap.children).forEach((box, g)=>{
+    const start=bounds[g];
+    const end=start+seq.groupSlots[g]-1;
+    const firstCell=firstRow.querySelector('.step[data-col="'+start+'"]');
+    const lastCell=firstRow.querySelector('.step[data-col="'+end+'"]');
+    if(!firstCell||!lastCell) return;
+    const fRect=firstCell.getBoundingClientRect();
+    const lRect=lastCell.getBoundingClientRect();
+    box.style.left=(fRect.left-wrapRect.left)+'px';
+    box.style.width=(lRect.right-fRect.left)+'px';
+  });
 }
 
 function renderGroupControls(){
