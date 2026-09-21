@@ -391,6 +391,27 @@ canvas{
   min-width:38px;
 }
 
+.seq-row-block{display:flex; flex-direction:column;}
+.seq-row-block + .seq-row-block{margin-top:10px;}
+.seq-row-flags{display:flex; align-items:center; gap:4px; margin-left:6px;}
+.seq-flag-btn{
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:0.3px;
+  background:transparent;
+  color:var(--subtext);
+  border:1px solid var(--border);
+  padding:2px 6px;
+  border-radius:4px;
+  cursor:pointer;
+  line-height:1.4;
+  white-space:nowrap;
+}
+.seq-flag-btn:hover{border-color:var(--accent-2); color:var(--accent-2);}
+.seq-flag-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
+.seq-flag-btn.mode-btn.active{background:var(--copy-pink); border-color:var(--copy-pink); color:var(--bg);}
+
 .rack{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
@@ -1307,10 +1328,10 @@ const seq={
   }
 };
 
-let seqCurrentStep=0;
-let seqNextStepTime=0;
+let seqMasterStep=0;
+let seqMasterNextTime=0;
+let seqBarStartTime=0;
 let seqTimerId=null;
-let seqHighlightCol=-1;
 const SEQ_LOOKAHEAD_MS=25;
 const SEQ_SCHEDULE_AHEAD=0.12;
 
@@ -1323,38 +1344,136 @@ function seqGroupBoundaries(groupSlots){
   return bounds;
 }
 
-function seqSetPlayheadColumn(col){
-  if(seqHighlightCol>=0){
-    document.querySelectorAll('.step[data-col="'+seqHighlightCol+'"]').forEach(el=>el.classList.remove('seq-current'));
+// ---- per-row independent time signatures (polymeter/polyrhythm) ----
+// A row is "linked" by default: it plays the global seq.groupSlots/SEQ_STEPS
+// structure, same as every other linked row, exactly like before this
+// feature existed. Right-clicking a row's label (or its flag button) can
+// "unlink" it, at which point it grows its own groupSlots array (a copy of
+// the global one at the moment it unlinked) and an independent step count
+// -- e.g. a 6-slot row can now play alongside a 4-slot row. An unlinked row
+// also carries a `mode`, which decides how its own bar lines up against the
+// global one:
+//   'loop' -- true polymeter. The row's steps are the SAME duration as
+//             every other row's (one slot = one 16th note at the current
+//             BPM), but its own bar is a different length, so its downbeat
+//             free-runs against the global bar and only realigns every
+//             LCM(rowSteps, SEQ_STEPS) slots.
+//   'sync' -- polyrhythm. The row's own N steps are stretched or squeezed
+//             to fill exactly one global bar's duration, so it always
+//             realigns at the top of every bar (e.g. a true 3-over-4 feel).
+function rowIsUnlinked(row){ return !!row.unlinked; }
+function rowGroupSlots(row){ return rowIsUnlinked(row) ? row.groupSlots : seq.groupSlots; }
+function rowSteps(row){ return rowGroupSlots(row).reduce((a,b)=>a+b, 0); }
+function rowMode(row){ return rowIsUnlinked(row) ? (row.mode||'loop') : 'linked'; }
+
+function rowSetUnlinked(row, unlinked){
+  if(unlinked===rowIsUnlinked(row)) return;
+  if(unlinked){
+    row.unlinked=true;
+    row.groupSlots=seq.groupSlots.slice();
+    row.mode=row.mode||'loop';
+    // Same length as before (cloned from the current global structure), so
+    // the existing pattern array still fits -- no rebuild needed yet.
+  }else{
+    const old=row.groupSlots;
+    row.unlinked=false;
+    seqRebuildRowPattern(row, old, seq.groupSlots);
+    delete seqSyncRuntime[row.id];
   }
-  document.querySelectorAll('.step[data-col="'+col+'"]').forEach(el=>el.classList.add('seq-current'));
-  seqHighlightCol=col;
+  renderSequencer();
 }
 
-function seqClearPlayhead(){
-  if(seqHighlightCol>=0){
-    document.querySelectorAll('.step[data-col="'+seqHighlightCol+'"]').forEach(el=>el.classList.remove('seq-current'));
-  }
-  seqHighlightCol=-1;
+function rowSetMode(row, mode){
+  if(!rowIsUnlinked(row) || row.mode===mode) return;
+  row.mode=mode;
+  if(mode!=='sync') delete seqSyncRuntime[row.id];
+  renderSequencer();
 }
 
-function seqScheduleStep(stepIdx, time){
-  seq.rows.forEach(row=>{
-    if(seq.pattern[row.id][stepIdx]){
-      const voice=VOICES.find(v=>v.id===row.voiceId);
-      if(voice) voice.trigger(state.voices[row.voiceId], time);
-    }
-  });
+// Per-row playhead: rows can now have different lengths and different step
+// durations at once, so the single global highlighted column of before
+// becomes a per-row map of {rowId: column}, and every lookup is scoped by
+// [data-row] as well as [data-col] since column numbers repeat across rows.
+let seqRowHighlight={};
+
+function seqSetRowPlayheadColumn(rowId, col){
+  const prev=seqRowHighlight[rowId];
+  if(prev!=null){
+    document.querySelectorAll('.step[data-row="'+rowId+'"][data-col="'+prev+'"]').forEach(el=>el.classList.remove('seq-current'));
+  }
+  document.querySelectorAll('.step[data-row="'+rowId+'"][data-col="'+col+'"]').forEach(el=>el.classList.add('seq-current'));
+  seqRowHighlight[rowId]=col;
+}
+
+function seqClearAllPlayheads(){
+  for(const rowId in seqRowHighlight){
+    const col=seqRowHighlight[rowId];
+    document.querySelectorAll('.step[data-row="'+rowId+'"][data-col="'+col+'"]').forEach(el=>el.classList.remove('seq-current'));
+  }
+  seqRowHighlight={};
+}
+
+function triggerRowStep(row, idx, time){
+  const pat=seq.pattern[row.id];
+  if(pat && pat[idx]){
+    const voice=VOICES.find(v=>v.id===row.voiceId);
+    if(voice) voice.trigger(state.voices[row.voiceId], time);
+  }
   const delayMs=Math.max(0, (time-ctx.currentTime)*1000);
-  setTimeout(()=>{ if(seq.playing) seqSetPlayheadColumn(stepIdx); }, delayMs);
+  setTimeout(()=>{ if(seq.playing) seqSetRowPlayheadColumn(row.id, idx); }, delayMs);
+}
+
+// One 'sync' runtime entry per unlinked sync-mode row: {lastStep}, tracking
+// how far into the CURRENT global bar that row has already scheduled, reset
+// to -1 every time the global bar restarts so the row's own subdivisions
+// are recomputed fresh (and therefore always land exactly on the downbeat).
+let seqSyncRuntime={};
+function getSyncRuntime(rowId){
+  return seqSyncRuntime[rowId] || (seqSyncRuntime[rowId]={lastStep:-1});
 }
 
 function seqScheduler(){
-  while(seqNextStepTime < ctx.currentTime + SEQ_SCHEDULE_AHEAD){
-    seqScheduleStep(seqCurrentStep, seqNextStepTime);
-    seqNextStepTime += seqSecondsPerStep();
-    seqCurrentStep = (seqCurrentStep+1) % SEQ_STEPS;
+  // Master lane: drives every linked row (at the global slot rate/length)
+  // and every unlinked 'loop' row (same slot duration as everyone else,
+  // but its own step count, so it free-runs and phases against the global
+  // bar instead of realigning every bar).
+  while(seqMasterNextTime < ctx.currentTime + SEQ_SCHEDULE_AHEAD){
+    const barPos=seqMasterStep % SEQ_STEPS;
+    if(barPos===0){
+      seqBarStartTime=seqMasterNextTime;
+      for(const id in seqSyncRuntime) seqSyncRuntime[id].lastStep=-1;
+    }
+    seq.rows.forEach(row=>{
+      const mode=rowMode(row);
+      if(mode==='sync') return; // handled by the sync lane below
+      const n=(mode==='loop') ? rowSteps(row) : SEQ_STEPS;
+      triggerRowStep(row, seqMasterStep % n, seqMasterNextTime);
+    });
+    seqMasterNextTime += seqSecondsPerStep();
+    seqMasterStep++;
   }
+  // Sync lane: every unlinked 'sync' row gets its own N-way subdivision of
+  // the CURRENT global bar's duration, scheduled independently so its steps
+  // land exactly even regardless of how SEQ_STEPS relates to that row's own
+  // step count -- and it never schedules past the current bar, since the
+  // master lane's barPos===0 reset above re-seeds it fresh for the next one.
+  const barDur=SEQ_STEPS*seqSecondsPerStep();
+  seq.rows.forEach(row=>{
+    if(rowMode(row)!=='sync') return;
+    const n=rowSteps(row);
+    if(n<=0) return;
+    const stepDur=barDur/n;
+    const rt=getSyncRuntime(row.id);
+    let k=rt.lastStep+1;
+    while(true){
+      const t=seqBarStartTime + k*stepDur;
+      if(t >= seqBarStartTime+barDur) break; // spilled past this bar -- next bar's reset picks it up
+      if(t >= ctx.currentTime+SEQ_SCHEDULE_AHEAD) break;
+      triggerRowStep(row, k % n, t);
+      rt.lastStep=k;
+      k++;
+    }
+  });
   seqTimerId=setTimeout(seqScheduler, SEQ_LOOKAHEAD_MS);
 }
 
@@ -1362,8 +1481,10 @@ function seqStart(){
   if(!ctx || ctx.state!=='running'){ showHint('Start the engine first.'); return; }
   if(seq.playing) return;
   seq.playing=true;
-  seqCurrentStep=0;
-  seqNextStepTime=ctx.currentTime+0.05;
+  seqMasterStep=0;
+  seqMasterNextTime=ctx.currentTime+0.05;
+  seqBarStartTime=seqMasterNextTime;
+  seqSyncRuntime={};
   seqScheduler();
   seqPlayBtn.textContent='■ Stop';
   seqPlayBtn.classList.add('active');
@@ -1372,36 +1493,44 @@ function seqStart(){
 function seqStop(){
   seq.playing=false;
   clearTimeout(seqTimerId);
-  seqClearPlayhead();
+  seqClearAllPlayheads();
   seqPlayBtn.textContent='▶ Play';
   seqPlayBtn.classList.remove('active');
 }
 
-function seqRebuildPatterns(oldGroupSlots, newGroupSlots){
+// Rebuilds ONE row's pattern array against a new groupSlots layout, keeping
+// whatever hits still fit (same logic as the old global-only rebuild, just
+// scoped to a single row so linked and unlinked rows can resize
+// independently).
+function seqRebuildRowPattern(row, oldGroupSlots, newGroupSlots){
   const oldBounds=seqGroupBoundaries(oldGroupSlots);
+  const old=seq.pattern[row.id]||[];
+  const next=[];
+  newGroupSlots.forEach((newCount, g)=>{
+    const oldCount=oldGroupSlots[g]||0;
+    const oldStart=oldBounds[g]||0;
+    for(let i=0;i<newCount;i++){
+      next.push(i<oldCount ? !!old[oldStart+i] : false);
+    }
+  });
+  seq.pattern[row.id]=next;
+}
+
+// Global groupSlots changes only ever touch LINKED rows -- an unlinked row
+// keeps whatever structure it was given until it's re-linked or edited via
+// its own inline controls.
+function seqRebuildLinkedPatterns(oldGroupSlots, newGroupSlots){
   seq.rows.forEach(row=>{
-    const old=seq.pattern[row.id];
-    const next=[];
-    newGroupSlots.forEach((newCount, g)=>{
-      const oldCount=oldGroupSlots[g]||0;
-      const oldStart=oldBounds[g]||0;
-      for(let i=0;i<newCount;i++){
-        next.push(i<oldCount ? old[oldStart+i] : false);
-      }
-    });
-    seq.pattern[row.id]=next;
+    if(!rowIsUnlinked(row)) seqRebuildRowPattern(row, oldGroupSlots, newGroupSlots);
   });
   SEQ_STEPS=newGroupSlots.reduce((a,b)=>a+b, 0);
 }
 
-// Restructuring the grid (beats, slots, copy/paste, rows) never stops
-// playback -- it keeps running through the change. seqCurrentStep is kept
-// in range for the new SEQ_STEPS instead of being reset, so a currently
-// playing pattern continues rather than jumping back to step 1; when
-// stopped it's fine to just park it at 0 for the next Play.
-function seqClampCurrentStep(){
-  seqCurrentStep = seq.playing ? (seqCurrentStep % SEQ_STEPS) : 0;
-}
+// Restructuring the grid (beats, slots, copy/paste, rows, linking) never
+// stops playback -- it keeps running through the change. seqMasterStep is
+// an ever-increasing counter (never reset except on Play), so every row
+// simply re-derives its own position via % its own current step count on
+// the very next tick; nothing needs to be clamped or rewound.
 
 function seqSetGroupCount(newCount){
   const oldGroupSlots=seq.groupSlots.slice();
@@ -1411,8 +1540,7 @@ function seqSetGroupCount(newCount){
     seq.groupSlots.length=newCount;
   }
   seq.beatsPerMeasure=newCount;
-  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
-  seqClampCurrentStep();
+  seqRebuildLinkedPatterns(oldGroupSlots, seq.groupSlots);
   renderSequencer();
   updateSeqMeasureUI();
 }
@@ -1420,22 +1548,47 @@ function seqSetGroupCount(newCount){
 function seqSetGroupSlots(groupIndex, newSlotCount){
   const oldGroupSlots=seq.groupSlots.slice();
   seq.groupSlots[groupIndex]=newSlotCount;
-  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
-  seqClampCurrentStep();
+  seqRebuildLinkedPatterns(oldGroupSlots, seq.groupSlots);
   renderSequencer();
 }
 
-// Copy/paste a measure (beat group): copy grabs that group's slot count and
-// every row's steps within it; paste overwrites a target group, resizing it
-// to match the copied length so the pasted pattern transfers exactly.
-let seqClipboard=null; // {slotCount, pattern:{voiceId:[bool,...]}}
+// A row's own inline controls call these instead, resizing just that row's
+// groupSlots/pattern and leaving every other row (linked or unlinked)
+// untouched.
+function rowSetGroupCount(row, newCount){
+  const old=row.groupSlots.slice();
+  if(newCount>row.groupSlots.length){
+    while(row.groupSlots.length<newCount) row.groupSlots.push(4);
+  }else if(newCount<row.groupSlots.length){
+    row.groupSlots.length=newCount;
+  }
+  seqRebuildRowPattern(row, old, row.groupSlots);
+  renderSequencer();
+}
+
+function rowSetGroupSlots(row, groupIndex, newSlotCount){
+  const old=row.groupSlots.slice();
+  row.groupSlots[groupIndex]=newSlotCount;
+  seqRebuildRowPattern(row, old, row.groupSlots);
+  renderSequencer();
+}
+
+// Copy/paste a measure (beat group) via the shared global strip: copy grabs
+// that group's slot count and every LINKED row's steps within it; paste
+// overwrites a target group, resizing it to match the copied length so the
+// pasted pattern transfers exactly. Unlinked rows aren't touched -- they
+// have their own copy/paste in their inline controls below.
+let seqClipboard=null; // {slotCount, pattern:{rowId:[bool,...]}}
 
 function seqCopyGroup(groupIndex){
   const bounds=seqGroupBoundaries(seq.groupSlots);
   const start=bounds[groupIndex];
   const count=seq.groupSlots[groupIndex];
   const pattern={};
-  seq.rows.forEach(row=>{ pattern[row.id]=seq.pattern[row.id].slice(start, start+count); });
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) return;
+    pattern[row.id]=seq.pattern[row.id].slice(start, start+count);
+  });
   seqClipboard={slotCount:count, pattern, sourceGroup:groupIndex};
   renderGroupControls();
   positionGroupControls();
@@ -1445,10 +1598,11 @@ function seqPasteGroup(groupIndex){
   if(!seqClipboard) return;
   const oldGroupSlots=seq.groupSlots.slice();
   seq.groupSlots[groupIndex]=seqClipboard.slotCount;
-  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
+  seqRebuildLinkedPatterns(oldGroupSlots, seq.groupSlots);
   const bounds=seqGroupBoundaries(seq.groupSlots);
   const start=bounds[groupIndex];
   seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) return;
     // A row added/removed/renamed between copy and paste just falls back to
     // silence for that row instead of throwing.
     const clip=seqClipboard.pattern[row.id];
@@ -1456,17 +1610,56 @@ function seqPasteGroup(groupIndex){
       seq.pattern[row.id][start+i]=!!(clip && clip[i]);
     }
   });
-  seqClampCurrentStep();
+  renderSequencer();
+}
+
+// Copy/paste a single group WITHIN one unlinked row's own chart -- used by
+// that row's inline controls, scoped to that one row only.
+let rowClipboard=null; // {slotCount, values:[bool,...]}
+
+function rowCopyGroup(row, groupIndex){
+  const bounds=seqGroupBoundaries(row.groupSlots);
+  const start=bounds[groupIndex];
+  const count=row.groupSlots[groupIndex];
+  rowClipboard={slotCount:count, values:seq.pattern[row.id].slice(start, start+count), sourceRow:row.id, sourceGroup:groupIndex};
+  renderSequencer();
+}
+
+function rowPasteGroup(row, groupIndex){
+  if(!rowClipboard) return;
+  const old=row.groupSlots.slice();
+  row.groupSlots[groupIndex]=rowClipboard.slotCount;
+  seqRebuildRowPattern(row, old, row.groupSlots);
+  const bounds=seqGroupBoundaries(row.groupSlots);
+  const start=bounds[groupIndex];
+  for(let i=0;i<rowClipboard.slotCount;i++){
+    seq.pattern[row.id][start+i]=!!rowClipboard.values[i];
+  }
   renderSequencer();
 }
 
 function renderSequencer(){
   const body=document.getElementById('seqRows');
   body.innerHTML='';
-  const groupStarts=new Set(seqGroupBoundaries(seq.groupSlots));
   seq.rows.forEach(row=>{
     const voice=VOICES.find(v=>v.id===row.voiceId);
     if(!voice) return; // a row pointing at a voice that no longer exists (e.g. a corrupted/edited save file) -- skip it rather than throw
+
+    const unlinked=rowIsUnlinked(row);
+    const groupSlots=rowGroupSlots(row);
+    const steps=rowSteps(row);
+    // Defensive: keep the pattern array's length in sync with whatever
+    // structure this row currently claims, even if something upstream (a
+    // hand-edited save file, a stale clipboard paste) left it mismatched.
+    const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
+    while(pat.length<steps) pat.push(false);
+    if(pat.length>steps) pat.length=steps;
+    const groupStarts=new Set(seqGroupBoundaries(groupSlots));
+
+    const block=document.createElement('div');
+    block.className='seq-row-block';
+    block.dataset.linked=String(!unlinked);
+
     const rowEl=document.createElement('div');
     rowEl.className='seq-row';
 
@@ -1485,6 +1678,31 @@ function renderSequencer(){
     label.title='Right-click row for options';
     label.appendChild(keyBadge);
     label.appendChild(document.createTextNode(voice.name));
+
+    const flags=document.createElement('span');
+    flags.className='seq-row-flags';
+    const unlinkBtn=document.createElement('button');
+    unlinkBtn.type='button';
+    unlinkBtn.className='seq-flag-btn'+(unlinked?' active':'');
+    unlinkBtn.textContent=unlinked?'OWN TIME':'LINKED';
+    unlinkBtn.title=unlinked
+      ? 'This row has its own measure structure ('+steps+' slots). Click to re-link it to the shared Beats/measure structure above.'
+      : 'This row follows the shared Beats/measure structure above. Click to give it its own independent measure structure.';
+    unlinkBtn.addEventListener('click', (e)=>{ e.stopPropagation(); rowSetUnlinked(row, !unlinked); });
+    flags.appendChild(unlinkBtn);
+    if(unlinked){
+      const modeBtn=document.createElement('button');
+      modeBtn.type='button';
+      const mode=rowMode(row);
+      modeBtn.className='seq-flag-btn mode-btn'+(mode==='sync'?' active':'');
+      modeBtn.textContent=(mode==='sync')?'SYNC':'LOOP';
+      modeBtn.title=(mode==='sync')
+        ? 'Sync (polyrhythm): this row\'s '+steps+' slots always fit exactly inside one shared bar, realigning every bar. Click to switch to Loop.'
+        : 'Loop (polymeter): this row\'s '+steps+' slots run at the same speed as everything else but its own bar length, so it phases against the shared bar and only realigns at the LCM. Click to switch to Sync.';
+      modeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); rowSetMode(row, mode==='sync'?'loop':'sync'); });
+      flags.appendChild(modeBtn);
+    }
+    label.appendChild(flags);
     rowEl.appendChild(label);
 
     rowEl.addEventListener('contextmenu', (e)=>{
@@ -1497,25 +1715,39 @@ function renderSequencer(){
 
     const cells=document.createElement('div');
     cells.className='seq-cells';
-    for(let i=0;i<SEQ_STEPS;i++){
+    for(let i=0;i<steps;i++){
       const btn=document.createElement('button');
       btn.type='button';
       btn.className='step'+(groupStarts.has(i)?' group-start':'');
       btn.dataset.col=String(i);
       btn.dataset.row=row.id;
-      if(seq.pattern[row.id][i]) btn.classList.add('on');
+      if(pat[i]) btn.classList.add('on');
       btn.addEventListener('click', ()=>{
-        const active=!seq.pattern[row.id][i];
-        seq.pattern[row.id][i]=active;
+        const active=!pat[i];
+        pat[i]=active;
         btn.classList.toggle('on', active);
       });
       cells.appendChild(btn);
     }
     rowEl.appendChild(cells);
-    body.appendChild(rowEl);
+    block.appendChild(rowEl);
+
+    if(unlinked){
+      const inlineCtrls=document.createElement('div');
+      inlineCtrls.className='seq-group-ctrls';
+      block.appendChild(inlineCtrls);
+    }
+
+    body.appendChild(block);
   });
   renderGroupControls();
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) renderRowControls(row);
+  });
   positionGroupControls();
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) positionRowControls(row);
+  });
 }
 
 function seqSetRowVoice(rowId, voiceId){
@@ -1536,6 +1768,9 @@ function seqDeleteRow(rowId){
   if(seq.rows.length<=1){ showHint('At least one row is required.'); return; }
   seq.rows=seq.rows.filter(r=>r.id!==rowId);
   delete seq.pattern[rowId];
+  delete seqSyncRuntime[rowId];
+  delete seqRowHighlight[rowId];
+  if(rowClipboard && rowClipboard.sourceRow===rowId) rowClipboard=null;
   renderSequencer();
 }
 
@@ -1543,18 +1778,24 @@ function seqDeleteRow(rowId){
 // control by measuring the actual rendered grid (not by recomputing cell/
 // gap math by hand), so they stay correct across the responsive breakpoint
 // and any future CSS tweak. Runs after both the grid and the control boxes
-// exist in the DOM.
+// exist in the DOM. The shared global strip only ever measures against a
+// LINKED row (unlinked rows may not even have SEQ_STEPS columns any more);
+// if every row has gone independent, there's nothing left for it to align
+// under, so it just hides itself -- the coarse Beats/measure stepper in the
+// header keeps working regardless, since it's what a re-linked or new row
+// falls back to.
 function positionGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
-  const firstRow=document.querySelector('#seqRows .seq-row');
-  if(!firstRow) return;
+  const firstLinkedBlock=document.querySelector('#seqRows .seq-row-block[data-linked="true"]');
+  if(!firstLinkedBlock){ wrap.style.display='none'; return; }
+  wrap.style.display='';
   const wrapRect=wrap.getBoundingClientRect();
   const bounds=seqGroupBoundaries(seq.groupSlots);
   Array.from(wrap.children).forEach((box, g)=>{
     const start=bounds[g];
     const end=start+seq.groupSlots[g]-1;
-    const firstCell=firstRow.querySelector('.step[data-col="'+start+'"]');
-    const lastCell=firstRow.querySelector('.step[data-col="'+end+'"]');
+    const firstCell=firstLinkedBlock.querySelector('.step[data-col="'+start+'"]');
+    const lastCell=firstLinkedBlock.querySelector('.step[data-col="'+end+'"]');
     if(!firstCell||!lastCell) return;
     const fRect=firstCell.getBoundingClientRect();
     const lRect=lastCell.getBoundingClientRect();
@@ -1563,53 +1804,112 @@ function positionGroupControls(){
   });
 }
 
+// Builds one group-control box (slot dial + copy/paste). Shared by the
+// global strip (operates on seq.groupSlots / linked rows) and each unlinked
+// row's own inline strip (operates on that row's own groupSlots) -- setSlots
+// and copy/paste are passed in so the same box markup/behavior serves both.
+function buildGroupCtrlBox(g, count, opts){
+  const box=document.createElement('div');
+  box.className='seq-group-ctrl';
+
+  const label=document.createElement('span');
+  label.className='seq-group-label';
+  label.textContent='Beat '+(g+1);
+
+  const dec=document.createElement('button');
+  dec.type='button'; dec.className='seq-beats-btn';
+  dec.textContent='−';
+  dec.setAttribute('aria-label', 'Decrease slots for beat '+(g+1));
+  dec.disabled=count<=SEQ_SLOTS_MIN;
+  dec.addEventListener('click', ()=> opts.setSlots(g, count-1));
+
+  const out=document.createElement('output');
+  out.textContent=String(count);
+
+  const inc=document.createElement('button');
+  inc.type='button'; inc.className='seq-beats-btn';
+  inc.textContent='+';
+  inc.setAttribute('aria-label', 'Increase slots for beat '+(g+1));
+  inc.disabled=count>=SEQ_SLOTS_MAX;
+  inc.addEventListener('click', ()=> opts.setSlots(g, count+1));
+
+  const copyBtn=document.createElement('button');
+  copyBtn.type='button'; copyBtn.className='seq-copy-btn';
+  copyBtn.textContent='C';
+  copyBtn.title='Copy beat '+(g+1);
+  copyBtn.setAttribute('aria-label', 'Copy beat '+(g+1));
+  if(opts.isCopied(g)) copyBtn.classList.add('active');
+  copyBtn.addEventListener('click', ()=> opts.copy(g));
+
+  const pasteBtn=document.createElement('button');
+  pasteBtn.type='button'; pasteBtn.className='seq-paste-btn';
+  pasteBtn.textContent='P';
+  pasteBtn.title='Paste into beat '+(g+1);
+  pasteBtn.setAttribute('aria-label', 'Paste into beat '+(g+1));
+  pasteBtn.disabled=!opts.canPaste();
+  pasteBtn.addEventListener('click', ()=> opts.paste(g));
+
+  box.appendChild(label); box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
+  box.appendChild(copyBtn); box.appendChild(pasteBtn);
+  return box;
+}
+
 function renderGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
   wrap.innerHTML='';
   seq.groupSlots.forEach((count, g)=>{
-    const box=document.createElement('div');
-    box.className='seq-group-ctrl';
+    wrap.appendChild(buildGroupCtrlBox(g, count, {
+      setSlots:(idx, n)=> seqSetGroupSlots(idx, n),
+      isCopied:(idx)=> !!(seqClipboard && seqClipboard.sourceGroup===idx),
+      canPaste:()=> !!seqClipboard,
+      copy:(idx)=> seqCopyGroup(idx),
+      paste:(idx)=> seqPasteGroup(idx)
+    }));
+  });
+}
 
-    const label=document.createElement('span');
-    label.className='seq-group-label';
-    label.textContent='Beat '+(g+1);
+// An unlinked row's own inline strip -- same box UI as the global one, but
+// scoped to that row's own groupSlots/pattern via rowSetGroupSlots and the
+// row-scoped rowClipboard/rowCopyGroup/rowPasteGroup.
+function renderRowControls(row){
+  // Locate this row's own inline-ctrls strip directly: it's the sibling
+  // .seq-group-ctrls inside the same .seq-row-block as this row's cells.
+  const cellsEl=document.querySelector('.step[data-row="'+row.id+'"]');
+  const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
+  if(!blockEl) return;
+  const ctrlsEl=blockEl.querySelector('.seq-group-ctrls');
+  if(!ctrlsEl) return;
+  ctrlsEl.innerHTML='';
+  row.groupSlots.forEach((count, g)=>{
+    ctrlsEl.appendChild(buildGroupCtrlBox(g, count, {
+      setSlots:(idx, n)=> rowSetGroupSlots(row, idx, n),
+      isCopied:(idx)=> !!(rowClipboard && rowClipboard.sourceRow===row.id && rowClipboard.sourceGroup===idx),
+      canPaste:()=> !!rowClipboard,
+      copy:(idx)=> rowCopyGroup(row, idx),
+      paste:(idx)=> rowPasteGroup(row, idx)
+    }));
+  });
+}
 
-    const dec=document.createElement('button');
-    dec.type='button'; dec.className='seq-beats-btn';
-    dec.textContent='−';
-    dec.setAttribute('aria-label', 'Decrease slots for beat '+(g+1));
-    dec.disabled=count<=SEQ_SLOTS_MIN;
-    dec.addEventListener('click', ()=> seqSetGroupSlots(g, count-1));
-
-    const out=document.createElement('output');
-    out.textContent=String(count);
-
-    const inc=document.createElement('button');
-    inc.type='button'; inc.className='seq-beats-btn';
-    inc.textContent='+';
-    inc.setAttribute('aria-label', 'Increase slots for beat '+(g+1));
-    inc.disabled=count>=SEQ_SLOTS_MAX;
-    inc.addEventListener('click', ()=> seqSetGroupSlots(g, count+1));
-
-    const copyBtn=document.createElement('button');
-    copyBtn.type='button'; copyBtn.className='seq-copy-btn';
-    copyBtn.textContent='C';
-    copyBtn.title='Copy beat '+(g+1);
-    copyBtn.setAttribute('aria-label', 'Copy beat '+(g+1));
-    if(seqClipboard && seqClipboard.sourceGroup===g) copyBtn.classList.add('active');
-    copyBtn.addEventListener('click', ()=> seqCopyGroup(g));
-
-    const pasteBtn=document.createElement('button');
-    pasteBtn.type='button'; pasteBtn.className='seq-paste-btn';
-    pasteBtn.textContent='P';
-    pasteBtn.title='Paste into beat '+(g+1);
-    pasteBtn.setAttribute('aria-label', 'Paste into beat '+(g+1));
-    pasteBtn.disabled=!seqClipboard;
-    pasteBtn.addEventListener('click', ()=> seqPasteGroup(g));
-
-    box.appendChild(label); box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
-    box.appendChild(copyBtn); box.appendChild(pasteBtn);
-    wrap.appendChild(box);
+function positionRowControls(row){
+  const cellsEl=document.querySelector('.step[data-row="'+row.id+'"]');
+  const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
+  if(!blockEl) return;
+  const ctrlsEl=blockEl.querySelector('.seq-group-ctrls');
+  const cellsWrap=blockEl.querySelector('.seq-cells');
+  if(!ctrlsEl || !cellsWrap) return;
+  const wrapRect=ctrlsEl.getBoundingClientRect();
+  const bounds=seqGroupBoundaries(row.groupSlots);
+  Array.from(ctrlsEl.children).forEach((box, g)=>{
+    const start=bounds[g];
+    const end=start+row.groupSlots[g]-1;
+    const firstCell=cellsWrap.querySelector('.step[data-col="'+start+'"]');
+    const lastCell=cellsWrap.querySelector('.step[data-col="'+end+'"]');
+    if(!firstCell||!lastCell) return;
+    const fRect=firstCell.getBoundingClientRect();
+    const lRect=lastCell.getBoundingClientRect();
+    box.style.left=(fRect.left-wrapRect.left)+'px';
+    box.style.width=(lRect.right-fRect.left)+'px';
   });
 }
 
@@ -1753,7 +2053,7 @@ document.addEventListener('keydown', (e)=>{
 });
 
 document.getElementById('seqTheory').textContent=
-  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. None of this stops playback -- beats, slots, copy/paste, and adding or deleting rows all rebuild the pattern live (keeping whatever hits still fit) while the transport keeps running. Each group also has a pink Copy (C) and green Paste (P) button: Copy grabs that group's slot count and every row's steps within it; Paste overwrites the target group and resizes it to match the copied length, so the pattern transfers exactly.";
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. Every row also has a LINKED/OWN TIME flag: by default all rows share that one measure structure, but flipping a row to OWN TIME gives it its own independent groups/slot-count -- its own inline controls appear right under it, with the same slot dials and pink Copy (C) / green Paste (P) buttons as the shared strip above, scoped to that row alone. An independent row also picks a mode: LOOP (true polymeter) keeps the same slot duration as every other row but its own bar length, so its downbeat free-runs against the shared bar and only lines back up every LCM(its steps, the shared steps) slots -- stack a 6-slot row over a 4-slot row in LOOP and they slowly drift in and out of phase. SYNC (polyrhythm) instead stretches that row's own N steps to always fill exactly one shared bar's duration, so it realigns on the downbeat every single bar -- a true 3-over-4 or 5-over-4 feel. None of this stops playback -- beats, slots, copy/paste, linking/unlinking, and adding or deleting rows all rebuild the pattern live (keeping whatever hits still fit) while the transport keeps running.";
 
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
@@ -1968,7 +2268,13 @@ function collectProjectState(){
       bpm:seq.bpm,
       beatsPerMeasure:seq.beatsPerMeasure,
       groupSlots:seq.groupSlots.slice(),
-      rows:seq.rows.map(r=>({id:r.id, voiceId:r.voiceId})),
+      rows:seq.rows.map(r=>({
+        id:r.id,
+        voiceId:r.voiceId,
+        unlinked:!!r.unlinked,
+        groupSlots:r.unlinked ? r.groupSlots.slice() : undefined,
+        mode:r.unlinked ? (r.mode||'loop') : undefined
+      })),
       pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()]))
     },
     voices:VOICES.map(v=>({
@@ -2058,15 +2364,27 @@ function applyProjectState(data){
   seq.bpm=typeof s.bpm==='number' ? s.bpm : seq.bpm;
   seq.beatsPerMeasure=typeof s.beatsPerMeasure==='number' ? s.beatsPerMeasure : seq.beatsPerMeasure;
   seq.groupSlots=(Array.isArray(s.groupSlots) && s.groupSlots.length) ? s.groupSlots.slice() : seq.groupSlots;
-  seq.rows=(Array.isArray(s.rows) && s.rows.length) ? s.rows.map(r=>({id:r.id, voiceId:r.voiceId})) : seq.rows;
+  seq.rows=(Array.isArray(s.rows) && s.rows.length) ? s.rows.map(r=>{
+    const row={id:r.id, voiceId:r.voiceId};
+    if(r.unlinked && Array.isArray(r.groupSlots) && r.groupSlots.length){
+      row.unlinked=true;
+      row.groupSlots=r.groupSlots.slice();
+      row.mode=(r.mode==='sync') ? 'sync' : 'loop';
+    }
+    return row;
+  }) : seq.rows;
   SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
   seq.pattern={};
   seq.rows.forEach(r=>{
+    const n=rowSteps(r);
     const saved=s.pattern && s.pattern[r.id];
-    seq.pattern[r.id]=Array.isArray(saved) ? saved.slice(0, SEQ_STEPS) : [];
-    while(seq.pattern[r.id].length<SEQ_STEPS) seq.pattern[r.id].push(false);
+    seq.pattern[r.id]=Array.isArray(saved) ? saved.slice(0, n) : [];
+    while(seq.pattern[r.id].length<n) seq.pattern[r.id].push(false);
   });
-  seqCurrentStep=0;
+  seqSyncRuntime={};
+  seqRowHighlight={};
+  rowClipboard=null;
+  seqMasterStep=0;
 
   // Keep future Add Row ids clear of anything this file already used.
   let maxRowNum=-1;
