@@ -390,6 +390,13 @@ canvas{
   border-color:rgba(var(--accent-2-rgb),0.65);
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -10px 16px rgba(0,0,0,0.28), 0 0 14px rgba(var(--accent-2-rgb),0.3);
 }
+.seq-cells-wrap{
+  flex:none;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
 .seq-cells{
   flex:none;
   display:grid;
@@ -512,7 +519,7 @@ canvas{
 
 .seq-group-ctrls{
   position:relative;
-  height:26px;
+  min-height:26px; /* JS sets the exact height once it knows how many stacked lines are above it */
   margin-top:10px;
 }
 #sequencer.seq-hide-bars .seq-group-ctrls{display:none;}
@@ -574,8 +581,7 @@ canvas{
 .seq-mutesolo-label{font-size:10px; color:var(--subtext); font-family:var(--mono);}
 .seq-group-ctrl{
   position:absolute;
-  top:0;
-  height:100%;
+  height:26px; /* one line's worth -- JS sets top/left/width per box, including which stacked line it's on */
   display:flex;
   align-items:center;
   justify-content:center;
@@ -2484,33 +2490,45 @@ function renderSequencer(){
       ]);
     });
 
-    const cells=document.createElement('div');
-    cells.className='seq-cells';
-    for(let i=0;i<steps;i++){
-      const btn=document.createElement('button');
-      btn.type='button';
-      btn.className='step'+(groupStarts.has(i)?' group-start':'');
-      btn.dataset.col=String(i);
-      btn.dataset.row=row.id;
-      if(pat[i]) btn.classList.add('on');
-      btn.addEventListener('pointerdown', (e)=>{
-        e.preventDefault(); // no text-selection/native-drag ghost while painting
-        const active=!pat[i];
-        pat[i]=active;
-        btn.classList.toggle('on', active);
-        seqPainting=true;
-        seqPaintValue=active;
-      });
-      btn.addEventListener('pointerenter', (e)=>{
-        if(!seqPainting) return;
-        if(e.buttons===0){ seqPainting=false; return; } // button was released outside the window
-        if(pat[i]===seqPaintValue) return;
-        pat[i]=seqPaintValue;
-        btn.classList.toggle('on', seqPaintValue);
-      });
-      cells.appendChild(btn);
-    }
-    rowEl.appendChild(cells);
+    // Long measures wrap onto multiple stacked lines instead of one
+    // endlessly wide strip -- seqGroupLineChunks always breaks on a
+    // beat-group boundary, fitting as many whole groups per line as the
+    // sequencer's current on-screen width allows. data-col stays the
+    // absolute step index regardless of which line a cell lands on, so
+    // painting/toggling and every position*Controls lookup keep working
+    // unchanged.
+    const cellsWrap=document.createElement('div');
+    cellsWrap.className='seq-cells-wrap';
+    seqGroupLineChunks(groupSlots).forEach(line=>{
+      const cells=document.createElement('div');
+      cells.className='seq-cells';
+      for(let i=line.stepStart;i<line.stepEnd;i++){
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.className='step'+(groupStarts.has(i)?' group-start':'');
+        btn.dataset.col=String(i);
+        btn.dataset.row=row.id;
+        if(pat[i]) btn.classList.add('on');
+        btn.addEventListener('pointerdown', (e)=>{
+          e.preventDefault(); // no text-selection/native-drag ghost while painting
+          const active=!pat[i];
+          pat[i]=active;
+          btn.classList.toggle('on', active);
+          seqPainting=true;
+          seqPaintValue=active;
+        });
+        btn.addEventListener('pointerenter', (e)=>{
+          if(!seqPainting) return;
+          if(e.buttons===0){ seqPainting=false; return; } // button was released outside the window
+          if(pat[i]===seqPaintValue) return;
+          pat[i]=seqPaintValue;
+          btn.classList.toggle('on', seqPaintValue);
+        });
+        cells.appendChild(btn);
+      }
+      cellsWrap.appendChild(cells);
+    });
+    rowEl.appendChild(cellsWrap);
     block.appendChild(rowEl);
 
     if(unlinked){
@@ -2616,17 +2634,26 @@ function positionGroupControls(){
   wrap.style.display='';
   const wrapRect=wrap.getBoundingClientRect();
   const bounds=seqGroupBoundaries(seq.groupSlots);
+  let maxBottom=0;
   Array.from(wrap.children).forEach((box, g)=>{
     const start=bounds[g];
     const end=start+seq.groupSlots[g]-1;
+    // Scoped to the whole row block, not one line -- with auto-stacking a
+    // group's cells can be on any of the row's stacked lines.
     const firstCell=firstLinkedBlock.querySelector('.step[data-col="'+start+'"]');
     const lastCell=firstLinkedBlock.querySelector('.step[data-col="'+end+'"]');
     if(!firstCell||!lastCell) return;
     const fRect=firstCell.getBoundingClientRect();
     const lRect=lastCell.getBoundingClientRect();
+    const top=fRect.top-wrapRect.top;
+    box.style.top=top+'px';
     box.style.left=(fRect.left-wrapRect.left)+'px';
     box.style.width=(lRect.right-fRect.left)+'px';
+    maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
+  // The strip's own height now spans as many stacked lines as the row
+  // above it does -- fixed CSS height would clip every line past the first.
+  wrap.style.height=(maxBottom||26)+'px';
 }
 
 // Builds one group-control box (slot dial + copy/paste). Shared by the
@@ -2721,21 +2748,27 @@ function positionRowControls(row){
   const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
   if(!blockEl) return;
   const ctrlsEl=blockEl.querySelector('.seq-group-ctrls');
-  const cellsWrap=blockEl.querySelector('.seq-cells');
-  if(!ctrlsEl || !cellsWrap) return;
+  if(!ctrlsEl) return;
   const wrapRect=ctrlsEl.getBoundingClientRect();
   const bounds=seqGroupBoundaries(row.groupSlots);
+  let maxBottom=0;
   Array.from(ctrlsEl.children).forEach((box, g)=>{
     const start=bounds[g];
     const end=start+row.groupSlots[g]-1;
-    const firstCell=cellsWrap.querySelector('.step[data-col="'+start+'"]');
-    const lastCell=cellsWrap.querySelector('.step[data-col="'+end+'"]');
+    // Scoped to the whole block (not a single .seq-cells line) so this still
+    // finds the cell when auto-stacking has put it on a later line.
+    const firstCell=blockEl.querySelector('.step[data-col="'+start+'"]');
+    const lastCell=blockEl.querySelector('.step[data-col="'+end+'"]');
     if(!firstCell||!lastCell) return;
     const fRect=firstCell.getBoundingClientRect();
     const lRect=lastCell.getBoundingClientRect();
+    const top=fRect.top-wrapRect.top;
+    box.style.top=top+'px';
     box.style.left=(fRect.left-wrapRect.left)+'px';
     box.style.width=(lRect.right-fRect.left)+'px';
+    maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
+  ctrlsEl.style.height=(maxBottom||26)+'px';
 }
 
 // An unlinked row in SYNC mode already gets squeezed/stretched in TIME to
@@ -2768,11 +2801,17 @@ function applySyncRowCellWidths(){
   const groupGapPx=Math.max(3, Math.round(SEQ_BASE_GROUP_GAP*seqZoom));
   seq.rows.forEach(row=>{
     const firstStep=document.querySelector('.step[data-row="'+row.id+'"]');
-    const cellsEl=firstStep ? firstStep.closest('.seq-cells') : null;
-    if(!cellsEl) return;
+    const wrapEl=firstStep ? firstStep.closest('.seq-cells-wrap') : null;
+    if(!wrapEl) return;
+    // Auto-stacking can split a row across several .seq-cells lines -- walk
+    // them in order and hand each its slice of the flat widths array, same
+    // as before but no longer assuming exactly one line holds every cell.
+    const lineEls=Array.from(wrapEl.querySelectorAll('.seq-cells'));
     if(!(rowIsUnlinked(row) && rowMode(row)==='sync')){
-      cellsEl.style.gridTemplateColumns='';
-      Array.from(cellsEl.children).forEach(el=>{ el.style.width=''; });
+      lineEls.forEach(cellsEl=>{
+        cellsEl.style.gridTemplateColumns='';
+        Array.from(cellsEl.children).forEach(el=>{ el.style.width=''; });
+      });
       return;
     }
     let widths;
@@ -2793,8 +2832,14 @@ function applySyncRowCellWidths(){
       const perCell=Math.max(6, (targetTotalPx-(totalSteps-1)*gapPx-Math.max(0, rowGroups-1)*groupGapPx)/totalSteps);
       widths=new Array(totalSteps).fill(perCell);
     }
-    cellsEl.style.gridTemplateColumns=widths.map(w=> w.toFixed(2)+'px').join(' ');
-    Array.from(cellsEl.children).forEach((el,i)=>{ el.style.width=(widths[i]!=null?widths[i]:cellPx)+'px'; });
+    let offset=0;
+    lineEls.forEach(cellsEl=>{
+      const n=cellsEl.children.length;
+      const lineWidths=widths.slice(offset, offset+n);
+      cellsEl.style.gridTemplateColumns=lineWidths.map(w=> w.toFixed(2)+'px').join(' ');
+      Array.from(cellsEl.children).forEach((el,i)=>{ el.style.width=(lineWidths[i]!=null?lineWidths[i]:cellPx)+'px'; });
+      offset+=n;
+    });
   });
 }
 
@@ -2839,9 +2884,58 @@ const sequencerEl=document.getElementById('sequencer');
 const seqZoomOut=document.getElementById('seqZoomOut');
 const seqZoomIn=document.getElementById('seqZoomIn');
 const seqZoomVal=document.getElementById('seqZoomVal');
-const SEQ_ZOOM_MIN=0.5, SEQ_ZOOM_MAX=2.0, SEQ_ZOOM_STEP=0.1;
+const SEQ_ZOOM_MIN=0.25, SEQ_ZOOM_MAX=2.0, SEQ_ZOOM_STEP=0.1;
 const SEQ_BASE_CELL=48, SEQ_BASE_GAP=4, SEQ_BASE_GROUP_GAP=8;
 let seqZoom=1;
+
+// ---- auto-stacking: wrap a row's cells onto multiple lines instead of
+// growing one endless horizontal strip, so a long measure never needs a
+// scrollbar. Always breaks on a beat-group boundary (a group's cells are
+// never split across two lines) and fits as many whole groups per line as
+// the sequencer's actual on-screen width allows at the current zoom.
+function seqCellsBudgetPx(){
+  const seqBody=document.getElementById('seqBody');
+  if(!seqBody) return Infinity;
+  const cs=getComputedStyle(sequencerEl);
+  const labelW=parseFloat(cs.getPropertyValue('--seq-label-w'))||108;
+  const rowGap=parseFloat(cs.getPropertyValue('--seq-row-gap'))||10;
+  const volW=34, perBeatW=34; // fixed column widths, see .seq-row-vol / .seq-row-perbeat
+  const fixedW=labelW+volW+perBeatW+rowGap*3;
+  const cellPx=Math.round(SEQ_BASE_CELL*seqZoom);
+  // Never shrink below room for a single cell -- that would make no
+  // progress at all and every group would end up on its own line.
+  return Math.max(cellPx, seqBody.clientWidth-fixedW);
+}
+
+function seqGroupLineChunks(groupSlots){
+  const totalSteps=groupSlots.reduce((a,b)=>a+b, 0);
+  const bounds=seqGroupBoundaries(groupSlots);
+  const cellPx=Math.round(SEQ_BASE_CELL*seqZoom);
+  const gapPx=Math.max(2, Math.round(SEQ_BASE_GAP*seqZoom));
+  const groupGapPx=Math.max(3, Math.round(SEQ_BASE_GROUP_GAP*seqZoom));
+  const budgetPx=seqCellsBudgetPx();
+  const lines=[];
+  let lineFirstGroup=0, lineGroupCount=0, lineWidthPx=0;
+  groupSlots.forEach((count, g)=>{
+    const groupWidthPx=count*cellPx+(count-1)*gapPx;
+    const addWidth=lineGroupCount===0 ? groupWidthPx : (groupGapPx+groupWidthPx);
+    // Only break if this line already has at least one group -- a single
+    // over-budget group still has to go somewhere, so it gets its own line
+    // rather than vanishing or overflowing silently.
+    if(lineGroupCount>0 && lineWidthPx+addWidth>budgetPx){
+      lines.push({groupStart:lineFirstGroup, groupEnd:g, stepStart:bounds[lineFirstGroup], stepEnd:bounds[g]});
+      lineFirstGroup=g;
+      lineGroupCount=0;
+      lineWidthPx=0;
+    }
+    lineWidthPx+=(lineGroupCount===0 ? groupWidthPx : (groupGapPx+groupWidthPx));
+    lineGroupCount++;
+  });
+  if(lineGroupCount>0 || lines.length===0){
+    lines.push({groupStart:lineFirstGroup, groupEnd:groupSlots.length, stepStart:bounds[lineFirstGroup], stepEnd:totalSteps});
+  }
+  return lines;
+}
 
 function seqApplyZoom(){
   sequencerEl.style.setProperty('--seq-cell', Math.round(SEQ_BASE_CELL*seqZoom)+'px');
@@ -2850,16 +2944,11 @@ function seqApplyZoom(){
   seqZoomVal.textContent=Math.round(seqZoom*100)+'%';
   seqZoomOut.disabled=seqZoom<=SEQ_ZOOM_MIN+1e-9;
   seqZoomIn.disabled=seqZoom>=SEQ_ZOOM_MAX-1e-9;
-  // The grid just resized -- SYNC rows' aligned cell widths first (they
-  // scale with the same zoom-derived cell/gap sizes), then every
-  // group-control box (global strip + each unlinked row's own inline strip)
-  // needs repositioning against the new pixel geometry, exactly as after
-  // any other grid change.
-  applySyncRowCellWidths();
-  positionGroupControls();
-  seq.rows.forEach(row=>{
-    if(rowIsUnlinked(row)) positionRowControls(row);
-  });
+  // Zooming changes how many cells fit per line, not just their size -- a
+  // full re-render re-chunks every row's auto-stacking (seqGroupLineChunks)
+  // against the new cell size, then rebuilds everything else (SYNC row
+  // widths, group-control positions) that depends on it.
+  renderSequencer();
 }
 
 seqZoomOut.addEventListener('click', ()=>{
@@ -3798,6 +3887,16 @@ loadProjectInput.addEventListener('change', ()=>{
   };
   reader.onerror=()=>{ showHint('Could not read that file.'); };
   reader.readAsText(file);
+});
+
+// The sequencer's auto-stacking (seqGroupLineChunks) fits itself to the
+// on-screen width, so a browser-window resize can change how many groups
+// fit per line -- re-render (rAF-debounced, since resize fires rapidly) to
+// keep it wrapped correctly rather than letting a scrollbar reappear.
+let seqResizeRaf=null;
+window.addEventListener('resize', ()=>{
+  if(seqResizeRaf) cancelAnimationFrame(seqResizeRaf);
+  seqResizeRaf=requestAnimationFrame(()=> renderSequencer());
 });
 
 window.addEventListener('keydown', (e)=>{
