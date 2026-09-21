@@ -129,6 +129,90 @@ canvas{
   max-width:100%;
 }
 
+.sequencer{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px 16px 16px;
+}
+.seq-head{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:14px;
+  margin-bottom:12px;
+}
+.seq-play{
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:0.5px;
+  background:var(--panel-2);
+  color:var(--accent);
+  border:1px solid var(--border);
+  padding:9px 14px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.seq-play:hover{border-color:var(--accent);}
+.seq-play.active{background:var(--accent); color:var(--bg);}
+.seq-clear{
+  font-family:var(--mono);
+  font-size:11px;
+  background:transparent;
+  color:var(--subtext);
+  border:1px solid var(--border);
+  padding:8px 12px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.seq-clear:hover{color:var(--text); border-color:var(--accent-2);}
+.seq-tempo{
+  display:flex; align-items:center; gap:8px;
+  font-size:12px; color:var(--subtext);
+  font-family:var(--mono);
+}
+.seq-tempo input{width:120px;}
+.seq-tempo output{color:var(--text); min-width:56px; display:inline-block;}
+.seq-body{overflow-x:auto; padding-bottom:2px;}
+.seq-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:520px;
+}
+.seq-row + .seq-row{margin-top:6px;}
+.seq-row-label{
+  flex:none;
+  width:64px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11px;
+  color:var(--subtext);
+  font-family:var(--mono);
+}
+.seq-cells{
+  flex:1;
+  display:grid;
+  grid-template-columns:repeat(16, minmax(22px,1fr));
+  gap:4px;
+}
+.step{
+  aspect-ratio:1;
+  padding:0;
+  border-radius:6px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  cursor:pointer;
+  transition:background 80ms, box-shadow 80ms;
+}
+.step:hover{border-color:var(--accent);}
+.step.group-start:not(:first-child){margin-left:8px;}
+.step.on{background:var(--accent); border-color:var(--accent);}
+.step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
+.step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
+
 .rack{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
@@ -258,6 +342,7 @@ canvas{
 @media (max-width:640px){
   .analysis{grid-template-columns:1fr;}
   .param{grid-template-columns: 72px 1fr 50px;}
+  .seq-row-label{width:52px; font-size:10px;}
 }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -295,6 +380,22 @@ canvas{
       <h2>Spectrogram <span class="subhint">scrolling, log freq, low at bottom</span></h2>
       <canvas id="spectrogramCanvas" width="960" height="160"></canvas>
     </div>
+  </section>
+
+  <section class="sequencer" id="sequencer">
+    <div class="seq-head">
+      <button id="seqPlayBtn" class="seq-play" type="button">&#9654; Play</button>
+      <label class="seq-tempo">Tempo
+        <input type="range" id="seqTempo" min="60" max="200" step="1" value="112">
+        <output id="seqTempoOut">112 BPM</output>
+      </label>
+      <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
+    </div>
+    <div class="seq-body" id="seqBody"></div>
+    <details class="theory">
+      <summary>Theory</summary>
+      <p id="seqTheory"></p>
+    </details>
   </section>
 
   <section class="rack" id="rack"></section>
@@ -397,8 +498,8 @@ function formatVal(p, v){
 
 const HH_RATIOS=[2, 3, 4.16, 5.43, 6.79, 8.21];
 
-function triggerKick(p){
-  const t0=ctx.currentTime;
+function triggerKick(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
   const osc=ctx.createOscillator(); osc.type='sine';
@@ -434,8 +535,8 @@ function triggerKick(p){
   setTimeout(()=>bus.disconnect(), (p.ampDecay+0.2)*1000);
 }
 
-function triggerSnare(p){
-  const t0=ctx.currentTime;
+function triggerSnare(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
   [p.tone1, p.tone2].forEach(f=>{
@@ -458,8 +559,8 @@ function triggerSnare(p){
   setTimeout(()=>bus.disconnect(), (Math.max(p.toneDecay,p.noiseDecay)+0.2)*1000);
 }
 
-function triggerHihat(p){
-  const t0=ctx.currentTime;
+function triggerHihat(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
   const mix=ctx.createGain(); mix.gain.value=1/HH_RATIOS.length;
@@ -479,8 +580,8 @@ function triggerHihat(p){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
-function triggerCymbal(p){
-  const t0=ctx.currentTime;
+function triggerCymbal(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
   const exciter=ctx.createBufferSource(); exciter.buffer=noiseBuffer;
@@ -511,8 +612,8 @@ function triggerCymbal(p){
   setTimeout(()=>bus.disconnect(), (p.decay+0.3)*1000);
 }
 
-function triggerClap(p){
-  const t0=ctx.currentTime;
+function triggerClap(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
   const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=p.centerFreq; bp.Q.value=1.4;
   bp.connect(bus);
@@ -541,8 +642,8 @@ function triggerClap(p){
   setTimeout(()=>bus.disconnect(), (tailStart+p.tailLength+0.3)*1000);
 }
 
-function triggerCowbell(p){
-  const t0=ctx.currentTime;
+function triggerCowbell(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
   const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=p.freq1*1.2; bp.Q.value=p.q;
   const env=ctx.createGain();
@@ -557,8 +658,8 @@ function triggerCowbell(p){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
-function triggerTom(p){
-  const t0=ctx.currentTime;
+function triggerTom(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
 
   const osc=ctx.createOscillator(); osc.type='sine';
@@ -583,15 +684,20 @@ function triggerTom(p){
   setTimeout(()=>bus.disconnect(), (p.decay+0.2)*1000);
 }
 
-function triggerKS(p){
+function triggerKS(p, when){
   if(!ksReady) return false;
-  ksGain.gain.setTargetAtTime(p.level, ctx.currentTime, 0.01);
-  ksNode.port.postMessage({type:'pluck', frequency:p.frequency, damping:p.damping});
+  const t=(when!=null)?when:ctx.currentTime;
+  const delayMs=Math.max(0, (t-ctx.currentTime)*1000);
+  const fire=()=>{
+    ksGain.gain.setTargetAtTime(p.level, ctx.currentTime, 0.01);
+    ksNode.port.postMessage({type:'pluck', frequency:p.frequency, damping:p.damping});
+  };
+  if(delayMs>1) setTimeout(fire, delayMs); else fire();
   return true;
 }
 
-function triggerChaos(p){
-  const t0=ctx.currentTime;
+function triggerChaos(p, when){
+  const t0=(when!=null)?when:ctx.currentTime;
   const bus=ctx.createGain(); bus.gain.value=p.level; bus.connect(master);
   const buf=makeChaosBuffer(ctx, 1.0, p.chaosR);
   const src=ctx.createBufferSource(); src.buffer=buf;
@@ -802,6 +908,142 @@ function firePad(voice, padEl){
   }
 }
 
+/* ---------- step sequencer ---------- */
+
+const SEQ_ROWS=['kick','snare','hihat','clap','tom'];
+const SEQ_STEPS=16;
+
+const seq={
+  bpm:112,
+  playing:false,
+  pattern:{
+    kick:  [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
+    snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+    hihat: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
+    clap:  new Array(SEQ_STEPS).fill(false),
+    tom:   new Array(SEQ_STEPS).fill(false)
+  }
+};
+
+let seqCurrentStep=0;
+let seqNextStepTime=0;
+let seqTimerId=null;
+let seqHighlightCol=-1;
+const SEQ_LOOKAHEAD_MS=25;
+const SEQ_SCHEDULE_AHEAD=0.12;
+
+function seqSecondsPerStep(){ return 60/seq.bpm/4; }
+
+function seqSetPlayheadColumn(col){
+  if(seqHighlightCol>=0){
+    document.querySelectorAll('.step[data-col="'+seqHighlightCol+'"]').forEach(el=>el.classList.remove('seq-current'));
+  }
+  document.querySelectorAll('.step[data-col="'+col+'"]').forEach(el=>el.classList.add('seq-current'));
+  seqHighlightCol=col;
+}
+
+function seqClearPlayhead(){
+  if(seqHighlightCol>=0){
+    document.querySelectorAll('.step[data-col="'+seqHighlightCol+'"]').forEach(el=>el.classList.remove('seq-current'));
+  }
+  seqHighlightCol=-1;
+}
+
+function seqScheduleStep(stepIdx, time){
+  SEQ_ROWS.forEach(id=>{
+    if(seq.pattern[id][stepIdx]){
+      const voice=VOICES.find(v=>v.id===id);
+      voice.trigger(state.voices[id], time);
+    }
+  });
+  const delayMs=Math.max(0, (time-ctx.currentTime)*1000);
+  setTimeout(()=>{ if(seq.playing) seqSetPlayheadColumn(stepIdx); }, delayMs);
+}
+
+function seqScheduler(){
+  while(seqNextStepTime < ctx.currentTime + SEQ_SCHEDULE_AHEAD){
+    seqScheduleStep(seqCurrentStep, seqNextStepTime);
+    seqNextStepTime += seqSecondsPerStep();
+    seqCurrentStep = (seqCurrentStep+1) % SEQ_STEPS;
+  }
+  seqTimerId=setTimeout(seqScheduler, SEQ_LOOKAHEAD_MS);
+}
+
+function seqStart(){
+  if(!ctx){ showHint('Start the engine first.'); return; }
+  if(seq.playing) return;
+  seq.playing=true;
+  seqCurrentStep=0;
+  seqNextStepTime=ctx.currentTime+0.05;
+  seqScheduler();
+  seqPlayBtn.textContent='■ Stop';
+  seqPlayBtn.classList.add('active');
+}
+
+function seqStop(){
+  seq.playing=false;
+  clearTimeout(seqTimerId);
+  seqClearPlayhead();
+  seqPlayBtn.textContent='▶ Play';
+  seqPlayBtn.classList.remove('active');
+}
+
+function renderSequencer(){
+  const body=document.getElementById('seqBody');
+  body.innerHTML='';
+  SEQ_ROWS.forEach(voiceId=>{
+    const voice=VOICES.find(v=>v.id===voiceId);
+    const row=document.createElement('div');
+    row.className='seq-row';
+
+    const label=document.createElement('span');
+    label.className='seq-row-label';
+    const keyBadge=document.createElement('span');
+    keyBadge.className='voice-key';
+    keyBadge.textContent=voice.key;
+    label.appendChild(keyBadge);
+    label.appendChild(document.createTextNode(voice.name));
+    row.appendChild(label);
+
+    const cells=document.createElement('div');
+    cells.className='seq-cells';
+    for(let i=0;i<SEQ_STEPS;i++){
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='step'+(i%4===0?' group-start':'');
+      btn.dataset.col=String(i);
+      btn.dataset.voice=voiceId;
+      if(seq.pattern[voiceId][i]) btn.classList.add('on');
+      btn.addEventListener('click', ()=>{
+        const active=!seq.pattern[voiceId][i];
+        seq.pattern[voiceId][i]=active;
+        btn.classList.toggle('on', active);
+      });
+      cells.appendChild(btn);
+    }
+    row.appendChild(cells);
+    body.appendChild(row);
+  });
+}
+
+const seqPlayBtn=document.getElementById('seqPlayBtn');
+const seqTempoInput=document.getElementById('seqTempo');
+const seqTempoOut=document.getElementById('seqTempoOut');
+const seqClearBtn=document.getElementById('seqClearBtn');
+
+seqPlayBtn.addEventListener('click', ()=>{ seq.playing ? seqStop() : seqStart(); });
+seqTempoInput.addEventListener('input', ()=>{
+  seq.bpm=parseFloat(seqTempoInput.value);
+  seqTempoOut.textContent=seq.bpm+' BPM';
+});
+seqClearBtn.addEventListener('click', ()=>{
+  SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
+  document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+});
+
+document.getElementById('seqTheory').textContent=
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing.";
+
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
 const KS_WORKLET_CODE=
@@ -984,6 +1226,7 @@ window.addEventListener('keydown', (e)=>{
 })();
 
 renderVoices();
+renderSequencer();
 
 })();
 </script>

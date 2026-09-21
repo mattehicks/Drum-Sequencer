@@ -48,3 +48,11 @@ AudioWorklet), and a logistic-map chaotic noise source (Chaos Perc).
 ## Status
 
 base1 committed. Not yet wired into the D20 firmware.
+
+## Workflow
+
+Starting this session: every iteration (prompt/response) that changes a file in this
+repo gets an automatic local commit, so history stays granular without asking each
+time. This only commits locally -- nothing is pushed to GitHub automatically. Push
+manually via GitHub Desktop or `gh repo create/push` (see top of this file) whenever
+you want a snapshot public/backed up.
