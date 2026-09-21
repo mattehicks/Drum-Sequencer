@@ -115,13 +115,46 @@ body{
   font-family:var(--mono);
 }
 
-.analysis{
+.analysis-head{
+  display:flex;
+  align-items:center;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:9px 14px;
+}
+.analysis-toggle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:transparent;
+  border:none;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:0.6px;
+  cursor:pointer;
+  padding:0;
+}
+.analysis-toggle:hover{color:var(--accent);}
+.analysis-toggle .chevron{
+  display:inline-block;
+  color:var(--accent);
+  font-size:10px;
+  transition:transform 120ms;
+}
+.analysis-toggle[aria-expanded="true"] .chevron{transform:rotate(90deg);}
+.analysis-body{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap:16px;
+  margin-top:16px;
 }
+.analysis-body[hidden]{display:none;}
 .analysis .spectrogram-block{grid-column:1/-1;}
-.analysis > div{
+.analysis-body > div{
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:8px;
@@ -443,7 +476,7 @@ canvas{
 .notes strong{color:var(--text);}
 
 @media (max-width:640px){
-  .analysis{grid-template-columns:1fr;}
+  .analysis-body{grid-template-columns:1fr;}
   .param{grid-template-columns: 72px 1fr 50px;}
   .seq-row-label{width:52px; font-size:10px;}
 }
@@ -463,18 +496,25 @@ canvas{
 
   <div id="hint" class="hint" aria-live="polite"></div>
 
-  <section class="analysis">
-    <div class="scope-block">
-      <h2>Scope</h2>
-      <canvas id="scopeCanvas" width="480" height="120"></canvas>
+  <section class="analysis" id="analysisPanel">
+    <div class="analysis-head">
+      <button type="button" class="analysis-toggle" id="analysisToggle" aria-expanded="false" aria-controls="analysisBody">
+        <span class="chevron">&#9656;</span> Visualizers
+      </button>
     </div>
-    <div class="spectrum-block">
-      <h2>Spectrum <span class="subhint">log freq, 20 Hz&ndash;Nyquist</span></h2>
-      <canvas id="spectrumCanvas" width="480" height="120"></canvas>
-    </div>
-    <div class="spectrogram-block">
-      <h2>Spectrogram <span class="subhint">scrolling, log freq, low at bottom</span></h2>
-      <canvas id="spectrogramCanvas" width="960" height="160"></canvas>
+    <div class="analysis-body" id="analysisBody" hidden>
+      <div class="scope-block">
+        <h2>Scope</h2>
+        <canvas id="scopeCanvas" width="480" height="120"></canvas>
+      </div>
+      <div class="spectrum-block">
+        <h2>Spectrum <span class="subhint">log freq, 20 Hz&ndash;Nyquist</span></h2>
+        <canvas id="spectrumCanvas" width="480" height="120"></canvas>
+      </div>
+      <div class="spectrogram-block">
+        <h2>Spectrogram <span class="subhint">scrolling, log freq, low at bottom</span></h2>
+        <canvas id="spectrogramCanvas" width="960" height="160"></canvas>
+      </div>
     </div>
   </section>
 
@@ -1466,6 +1506,7 @@ function startVisualLoop(){
 
   function loop(){
     requestAnimationFrame(loop);
+    if(!analysisExpanded) return; // skip rendering while minimized
     analyser.getByteTimeDomainData(timeData);
     analyser.getByteFrequencyData(freqData);
     drawScope();
@@ -1476,6 +1517,22 @@ function startVisualLoop(){
 }
 
 /* ---------- engine ---------- */
+
+/* ---------- collapsible visualizers ---------- */
+
+const analysisPanel=document.getElementById('analysisPanel');
+const analysisToggle=document.getElementById('analysisToggle');
+const analysisBody=document.getElementById('analysisBody');
+let analysisExpanded=false;
+
+function setAnalysisExpanded(expanded){
+  analysisExpanded=expanded;
+  analysisBody.hidden=!expanded;
+  analysisToggle.setAttribute('aria-expanded', String(expanded));
+  analysisToggle.querySelector('.chevron').innerHTML=expanded ? '&#9662;' : '&#9656;';
+}
+analysisToggle.addEventListener('click', ()=> setAnalysisExpanded(!analysisExpanded));
+setAnalysisExpanded(false); // minimized by default
 
 const engineBtn=document.getElementById('engineBtn');
 const engineStatus=document.getElementById('engineStatus');
