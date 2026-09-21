@@ -384,21 +384,71 @@ canvas{
   grid-auto-columns:var(--seq-cell);
   gap:var(--seq-gap);
 }
+/* The step cells are where the glass treatment matters most -- this is the
+   thing the user is actually looking at and clicking hundreds of times a
+   session. No backdrop-filter here though: a grid can legitimately run
+   into the hundreds of cells (a long text-pattern arrangement applied to a
+   row, for instance), and compositing a blur on every single one of them
+   is a real perf cost that a flat panel behind them wouldn't even make
+   visible -- the gradient/border/shadow layering alone reads as glass. */
 .step{
+  --glass-rgb:150,146,142; /* neutral glass when off */
   width:var(--seq-cell);
   aspect-ratio:1;
   padding:0;
   border-radius:6px;
-  background:var(--panel-2);
-  border:1px solid var(--border);
+  position:relative;
+  overflow:hidden;
   cursor:pointer;
-  transition:background 80ms, box-shadow 80ms;
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--glass-rgb),0.16), rgba(var(--glass-rgb),0.05));
+  border:1px solid rgba(var(--glass-rgb),0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 -8px 12px rgba(0,0,0,0.32);
+  transition:background 100ms, border-color 100ms, box-shadow 100ms;
 }
-.step:hover{border-color:var(--accent);}
+.step::before{
+  content:'';
+  position:absolute;
+  top:-90%; left:-30%;
+  width:45%; height:280%;
+  background:linear-gradient(120deg, rgba(255,255,255,0.3), rgba(255,255,255,0) 70%);
+  transform:rotate(18deg);
+  pointer-events:none;
+}
+.step:hover{
+  border-color:rgba(var(--accent-rgb),0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -8px 12px rgba(0,0,0,0.28), 0 0 8px rgba(var(--accent-rgb),0.22);
+}
 .step.group-start:not(:first-child){margin-left:var(--seq-group-gap);}
-.step.on{background:var(--accent); border-color:var(--accent);}
-.step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
-.step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
+.step.on{
+  --glass-rgb:var(--accent-rgb);
+  border-color:rgba(var(--accent-rgb),0.85);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.06) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-rgb),0.55), rgba(var(--accent-rgb),0.28));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    inset 0 -8px 12px rgba(0,0,0,0.22),
+    0 0 14px rgba(var(--accent-rgb),0.55);
+}
+.step.seq-current{
+  border-color:rgba(var(--accent-2-rgb),0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.2),
+    inset 0 -8px 12px rgba(0,0,0,0.28),
+    0 0 0 2px rgba(var(--accent-2-rgb),0.9),
+    0 0 10px rgba(var(--accent-2-rgb),0.5);
+}
+.step.on.seq-current{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    inset 0 -8px 12px rgba(0,0,0,0.2),
+    0 0 0 2px rgba(var(--accent-2-rgb),0.9),
+    0 0 16px rgba(var(--accent-rgb),0.65);
+}
 
 .seq-ctrl-group{
   display:flex;
