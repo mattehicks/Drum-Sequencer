@@ -413,6 +413,9 @@ canvas{
   position:relative;
   overflow:hidden;
   cursor:pointer;
+  touch-action:none; /* dragging across cells to fill a range shouldn't scroll */
+  -webkit-user-select:none;
+  user-select:none;
   background:
     linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0) 65%),
     linear-gradient(rgba(var(--glass-rgb),0.16), rgba(var(--glass-rgb),0.05));
@@ -2261,6 +2264,17 @@ function seqPasteGroup(groupIndex){
   renderSequencer();
 }
 
+// Drag-to-fill across step cells: the first cell's pointerdown decides
+// whether this drag is turning steps ON or OFF (whatever that cell wasn't
+// already), then every other cell the pointer enters while the button is
+// still held gets set to that SAME value -- not toggled individually, so
+// one drag paints a consistent stretch rather than flickering on/off as it
+// crosses cells that started in different states. Global rather than
+// per-row since nothing stops a drag from crossing row boundaries.
+let seqPainting=false, seqPaintValue=false;
+document.addEventListener('pointerup', ()=>{ seqPainting=false; });
+document.addEventListener('pointercancel', ()=>{ seqPainting=false; });
+
 // Copy/paste a single group WITHIN one unlinked row's own chart -- used by
 // that row's inline controls, scoped to that one row only.
 let rowClipboard=null; // {slotCount, values:[bool,...]}
@@ -2461,10 +2475,20 @@ function renderSequencer(){
       btn.dataset.col=String(i);
       btn.dataset.row=row.id;
       if(pat[i]) btn.classList.add('on');
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('pointerdown', (e)=>{
+        e.preventDefault(); // no text-selection/native-drag ghost while painting
         const active=!pat[i];
         pat[i]=active;
         btn.classList.toggle('on', active);
+        seqPainting=true;
+        seqPaintValue=active;
+      });
+      btn.addEventListener('pointerenter', (e)=>{
+        if(!seqPainting) return;
+        if(e.buttons===0){ seqPainting=false; return; } // button was released outside the window
+        if(pat[i]===seqPaintValue) return;
+        pat[i]=seqPaintValue;
+        btn.classList.toggle('on', seqPaintValue);
       });
       cells.appendChild(btn);
     }
