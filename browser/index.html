@@ -613,7 +613,8 @@ canvas{
   border-radius:8px;
   padding:14px 16px 16px;
 }
-.patterns-head h2, .arrangement-block h3{
+.patterns-head{margin-bottom:10px;}
+.arrangement-block h3{
   font-size:12px;
   text-transform:uppercase;
   letter-spacing:0.6px;
@@ -621,6 +622,7 @@ canvas{
   margin:0 0 10px;
   font-weight:600;
 }
+.patterns-body[hidden]{display:none;}
 .pattern-row{
   display:flex;
   align-items:center;
@@ -1034,22 +1036,28 @@ canvas{
   </section>
 
   <section class="patterns" id="patternsSection">
-    <div class="patterns-head"><h2>Text Patterns / Arrangement</h2></div>
-    <div id="patternList"></div>
-    <button type="button" class="seq-add-row patterns-add" id="addPatternBtn">+ Add Pattern</button>
-
-    <div class="arrangement-block">
-      <h3>Arrangement</h3>
-      <div class="arrangement-row" id="arrangementRow"></div>
-      <button type="button" class="seq-add-row" id="addArrangeBtn">+ Add</button>
-      <div class="arrangement-preview" id="arrangementPreview"></div>
+    <div class="patterns-head">
+      <button type="button" class="analysis-toggle" id="patternsToggle" aria-expanded="true" aria-controls="patternsBody">
+        <span class="chevron">&#9662;</span> Text Patterns / Arrangement
+      </button>
     </div>
+    <div class="patterns-body" id="patternsBody">
+      <div id="patternList"></div>
+      <button type="button" class="seq-add-row patterns-add" id="addPatternBtn">+ Add Pattern</button>
 
-    <div class="patterns-apply">
-      <label>Apply to
-        <select id="patternApplyTarget"></select>
-      </label>
-      <button type="button" class="file-btn" id="patternApplyBtn">Apply to Sequencer</button>
+      <div class="arrangement-block">
+        <h3>Arrangement</h3>
+        <div class="arrangement-row" id="arrangementRow"></div>
+        <button type="button" class="seq-add-row" id="addArrangeBtn">+ Add</button>
+        <div class="arrangement-preview" id="arrangementPreview"></div>
+      </div>
+
+      <div class="patterns-apply">
+        <label>Apply to
+          <select id="patternApplyTarget"></select>
+        </label>
+        <button type="button" class="file-btn" id="patternApplyBtn">Apply to Sequencer</button>
+      </div>
     </div>
   </section>
 
@@ -2920,6 +2928,17 @@ document.getElementById('addArrangeBtn').addEventListener('click', (e)=>{
 });
 
 document.getElementById('patternApplyBtn').addEventListener('click', applyArrangementToSequencer);
+
+const patternsToggle=document.getElementById('patternsToggle');
+const patternsBody=document.getElementById('patternsBody');
+let patternsExpanded=true;
+function setPatternsExpanded(expanded){
+  patternsExpanded=expanded;
+  patternsBody.hidden=!expanded;
+  patternsToggle.setAttribute('aria-expanded', String(expanded));
+  patternsToggle.querySelector('.chevron').innerHTML=expanded ? '&#9662;' : '&#9656;';
+}
+patternsToggle.addEventListener('click', ()=> setPatternsExpanded(!patternsExpanded));
 
 // Seed with the exact example from the design brief: Pattern A = 7x4, 2x1,
 // 7x4, 3x1 (-> 7-7-7-7-2-7-7-7-7-3), Pattern B = 4x3, 3x2, 4x3
