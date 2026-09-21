@@ -53,6 +53,8 @@ base1 committed. Not yet wired into the D20 firmware.
 
 Starting this session: every iteration (prompt/response) that changes a file in this
 repo gets an automatic local commit, so history stays granular without asking each
-time. This only commits locally -- nothing is pushed to GitHub automatically. Push
-manually via GitHub Desktop or `gh repo create/push` (see top of this file) whenever
-you want a snapshot public/backed up.
+time. Edits are written straight to this file on disk (no intermediate "delivered
+file" step) -- you'll see the git commit, not a repeated file card. This only
+commits locally -- nothing is pushed to GitHub automatically. Push manually via
+GitHub Desktop or `gh repo create/push` (see top of this file) whenever you want a
+snapshot public/backed up.
