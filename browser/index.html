@@ -243,6 +243,44 @@ canvas{
   color:var(--subtext);
   font-family:var(--mono);
 }
+.seq-row-voice-btn{
+  border:none;
+  padding:0;
+  font:inherit;
+  line-height:1;
+  cursor:pointer;
+}
+.seq-row-voice-btn:hover, .seq-row-voice-btn:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:1px;
+}
+.seq-row-del{
+  flex:none;
+  width:18px; height:18px;
+  padding:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px;
+  line-height:1;
+  background:transparent;
+  color:var(--subtext);
+  border:1px solid var(--border);
+  border-radius:4px;
+  cursor:pointer;
+}
+.seq-row-del:hover:not(:disabled){color:var(--bg); background:#ff5a5a; border-color:#ff5a5a;}
+.seq-row-del:disabled{opacity:0.25; cursor:default;}
+.seq-add-row{
+  margin-top:10px;
+  font-family:var(--mono);
+  font-size:11px;
+  background:transparent;
+  color:var(--subtext);
+  border:1px dashed var(--border);
+  padding:7px 12px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.seq-add-row:hover{color:var(--accent-2); border-color:var(--accent-2);}
 .seq-cells{
   flex:none;
   display:grid;
@@ -382,6 +420,41 @@ canvas{
   font-weight:600;
   flex:1;
 }
+
+.voice-picker{
+  position:fixed;
+  z-index:60;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:5px;
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+  min-width:150px;
+  max-height:70vh;
+  overflow-y:auto;
+  box-shadow:0 10px 28px rgba(0,0,0,0.45);
+}
+.voice-picker[hidden]{display:none;}
+.voice-picker-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  background:transparent;
+  border:none;
+  border-radius:5px;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  text-align:left;
+  padding:6px 8px;
+  cursor:pointer;
+}
+.voice-picker-item:hover{background:var(--panel);}
+.voice-picker-item.active{color:var(--accent);}
+.voice-picker-item .voice-key{width:16px; height:16px; font-size:9px; border-radius:3px;}
 .pad{
   width:100%;
   padding:12px;
@@ -547,6 +620,7 @@ canvas{
       <div id="seqRows"></div>
       <div class="seq-group-ctrls" id="seqGroupCtrls"></div>
     </div>
+    <button type="button" class="seq-add-row" id="seqAddRowBtn">+ Add Row</button>
     <details class="theory">
       <summary>Theory</summary>
       <p id="seqTheory"></p>
@@ -1065,7 +1139,12 @@ function firePad(voice, padEl){
 
 /* ---------- step sequencer ---------- */
 
-const SEQ_ROWS=['kick','snare','hihat','clap','tom'];
+// Rows are identified by a stable id, independent of which voice they
+// trigger, so seq.pattern (keyed by row id, not voice id) survives a row's
+// instrument being reassigned via the voice picker, and two rows can even
+// share the same voice.
+let seqRowUid=5; // 0-4 are the built-in starter rows below; new rows continue from here
+function seqNewRowId(){ return 'row'+(seqRowUid++); }
 let SEQ_STEPS=16;
 
 const seq={
@@ -1073,12 +1152,19 @@ const seq={
   beatsPerMeasure:4,
   groupSlots:[4,4,4,4],
   playing:false,
+  rows:[
+    {id:'row0', voiceId:'kick'},
+    {id:'row1', voiceId:'snare'},
+    {id:'row2', voiceId:'hihat'},
+    {id:'row3', voiceId:'clap'},
+    {id:'row4', voiceId:'tom'}
+  ],
   pattern:{
-    kick:  [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
-    snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-    hihat: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
-    clap:  new Array(SEQ_STEPS).fill(false),
-    tom:   new Array(SEQ_STEPS).fill(false)
+    row0: [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
+    row1: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+    row2: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
+    row3: new Array(SEQ_STEPS).fill(false),
+    row4: new Array(SEQ_STEPS).fill(false)
   }
 };
 
@@ -1114,10 +1200,10 @@ function seqClearPlayhead(){
 }
 
 function seqScheduleStep(stepIdx, time){
-  SEQ_ROWS.forEach(id=>{
-    if(seq.pattern[id][stepIdx]){
-      const voice=VOICES.find(v=>v.id===id);
-      voice.trigger(state.voices[id], time);
+  seq.rows.forEach(row=>{
+    if(seq.pattern[row.id][stepIdx]){
+      const voice=VOICES.find(v=>v.id===row.voiceId);
+      voice.trigger(state.voices[row.voiceId], time);
     }
   });
   const delayMs=Math.max(0, (time-ctx.currentTime)*1000);
@@ -1154,8 +1240,8 @@ function seqStop(){
 
 function seqRebuildPatterns(oldGroupSlots, newGroupSlots){
   const oldBounds=seqGroupBoundaries(oldGroupSlots);
-  SEQ_ROWS.forEach(id=>{
-    const old=seq.pattern[id];
+  seq.rows.forEach(row=>{
+    const old=seq.pattern[row.id];
     const next=[];
     newGroupSlots.forEach((newCount, g)=>{
       const oldCount=oldGroupSlots[g]||0;
@@ -1164,7 +1250,7 @@ function seqRebuildPatterns(oldGroupSlots, newGroupSlots){
         next.push(i<oldCount ? old[oldStart+i] : false);
       }
     });
-    seq.pattern[id]=next;
+    seq.pattern[row.id]=next;
   });
   SEQ_STEPS=newGroupSlots.reduce((a,b)=>a+b, 0);
 }
@@ -1203,7 +1289,7 @@ function seqCopyGroup(groupIndex){
   const start=bounds[groupIndex];
   const count=seq.groupSlots[groupIndex];
   const pattern={};
-  SEQ_ROWS.forEach(id=>{ pattern[id]=seq.pattern[id].slice(start, start+count); });
+  seq.rows.forEach(row=>{ pattern[row.id]=seq.pattern[row.id].slice(start, start+count); });
   seqClipboard={slotCount:count, pattern, sourceGroup:groupIndex};
   renderGroupControls();
   positionGroupControls();
@@ -1217,9 +1303,12 @@ function seqPasteGroup(groupIndex){
   seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
   const bounds=seqGroupBoundaries(seq.groupSlots);
   const start=bounds[groupIndex];
-  SEQ_ROWS.forEach(id=>{
+  seq.rows.forEach(row=>{
+    // A row added/removed/renamed between copy and paste just falls back to
+    // silence for that row instead of throwing.
+    const clip=seqClipboard.pattern[row.id];
     for(let i=0;i<seqClipboard.slotCount;i++){
-      seq.pattern[id][start+i]=!!seqClipboard.pattern[id][i];
+      seq.pattern[row.id][start+i]=!!(clip && clip[i]);
     }
   });
   seqCurrentStep=0;
@@ -1230,19 +1319,36 @@ function renderSequencer(){
   const body=document.getElementById('seqRows');
   body.innerHTML='';
   const groupStarts=new Set(seqGroupBoundaries(seq.groupSlots));
-  SEQ_ROWS.forEach(voiceId=>{
-    const voice=VOICES.find(v=>v.id===voiceId);
-    const row=document.createElement('div');
-    row.className='seq-row';
+  seq.rows.forEach(row=>{
+    const voice=VOICES.find(v=>v.id===row.voiceId);
+    const rowEl=document.createElement('div');
+    rowEl.className='seq-row';
 
     const label=document.createElement('span');
     label.className='seq-row-label';
-    const keyBadge=document.createElement('span');
-    keyBadge.className='voice-key';
+    const keyBadge=document.createElement('button');
+    keyBadge.type='button';
+    keyBadge.className='voice-key seq-row-voice-btn';
     keyBadge.textContent=voice.key;
+    keyBadge.title='Change instrument (currently '+voice.name+')';
+    keyBadge.setAttribute('aria-label', 'Change instrument for this row, currently '+voice.name);
+    keyBadge.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openVoicePicker(keyBadge, row.voiceId, (voiceId)=> seqSetRowVoice(row.id, voiceId));
+    });
     label.appendChild(keyBadge);
     label.appendChild(document.createTextNode(voice.name));
-    row.appendChild(label);
+    rowEl.appendChild(label);
+
+    const delBtn=document.createElement('button');
+    delBtn.type='button';
+    delBtn.className='seq-row-del';
+    delBtn.textContent='✕';
+    delBtn.title='Delete row';
+    delBtn.setAttribute('aria-label', 'Delete '+voice.name+' row');
+    delBtn.disabled=seq.rows.length<=1;
+    delBtn.addEventListener('click', ()=> seqDeleteRow(row.id));
+    rowEl.appendChild(delBtn);
 
     const cells=document.createElement('div');
     cells.className='seq-cells';
@@ -1251,20 +1357,43 @@ function renderSequencer(){
       btn.type='button';
       btn.className='step'+(groupStarts.has(i)?' group-start':'');
       btn.dataset.col=String(i);
-      btn.dataset.voice=voiceId;
-      if(seq.pattern[voiceId][i]) btn.classList.add('on');
+      btn.dataset.row=row.id;
+      if(seq.pattern[row.id][i]) btn.classList.add('on');
       btn.addEventListener('click', ()=>{
-        const active=!seq.pattern[voiceId][i];
-        seq.pattern[voiceId][i]=active;
+        const active=!seq.pattern[row.id][i];
+        seq.pattern[row.id][i]=active;
         btn.classList.toggle('on', active);
       });
       cells.appendChild(btn);
     }
-    row.appendChild(cells);
-    body.appendChild(row);
+    rowEl.appendChild(cells);
+    body.appendChild(rowEl);
   });
   renderGroupControls();
   positionGroupControls();
+}
+
+function seqSetRowVoice(rowId, voiceId){
+  const row=seq.rows.find(r=>r.id===rowId);
+  if(!row || row.voiceId===voiceId) return;
+  row.voiceId=voiceId;
+  renderSequencer();
+}
+
+function seqAddRow(voiceId){
+  if(seq.playing) seqStop();
+  const id=seqNewRowId();
+  seq.rows.push({id, voiceId});
+  seq.pattern[id]=new Array(SEQ_STEPS).fill(false);
+  renderSequencer();
+}
+
+function seqDeleteRow(rowId){
+  if(seq.rows.length<=1){ showHint('At least one row is required.'); return; }
+  if(seq.playing) seqStop();
+  seq.rows=seq.rows.filter(r=>r.id!==rowId);
+  delete seq.pattern[rowId];
+  renderSequencer();
 }
 
 // Group-control boxes are centered under the exact step columns they
@@ -1371,8 +1500,63 @@ seqBeatsInc.addEventListener('click', ()=>{
   if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqSetGroupCount(seq.beatsPerMeasure+1);
 });
 seqClearBtn.addEventListener('click', ()=>{
-  SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
+  seq.rows.forEach(row=> seq.pattern[row.id].fill(false));
   document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+});
+
+/* ---------- floating instrument picker ---------- */
+
+const voicePicker=document.createElement('div');
+voicePicker.className='voice-picker';
+voicePicker.id='voicePicker';
+voicePicker.hidden=true;
+document.body.appendChild(voicePicker);
+
+function openVoicePicker(anchorEl, currentVoiceId, onSelect){
+  voicePicker.innerHTML='';
+  VOICES.forEach(v=>{
+    const item=document.createElement('button');
+    item.type='button';
+    item.className='voice-picker-item'+(v.id===currentVoiceId ? ' active' : '');
+    const badge=document.createElement('span');
+    badge.className='voice-key';
+    badge.textContent=v.key;
+    item.appendChild(badge);
+    item.appendChild(document.createTextNode(v.name));
+    item.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      onSelect(v.id);
+      closeVoicePicker();
+    });
+    voicePicker.appendChild(item);
+  });
+  voicePicker.hidden=false;
+  const anchorRect=anchorEl.getBoundingClientRect();
+  const pickerRect=voicePicker.getBoundingClientRect();
+  let left=anchorRect.left;
+  let top=anchorRect.bottom+4;
+  left=Math.min(left, window.innerWidth-pickerRect.width-8);
+  left=Math.max(8, left);
+  if(top+pickerRect.height>window.innerHeight-8) top=anchorRect.top-pickerRect.height-4;
+  voicePicker.style.left=left+'px';
+  voicePicker.style.top=top+'px';
+}
+
+function closeVoicePicker(){
+  voicePicker.hidden=true;
+}
+
+document.addEventListener('click', (e)=>{
+  if(!voicePicker.hidden && !voicePicker.contains(e.target)) closeVoicePicker();
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape') closeVoicePicker();
+});
+
+const seqAddRowBtn=document.getElementById('seqAddRowBtn');
+seqAddRowBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  openVoicePicker(seqAddRowBtn, null, (voiceId)=> seqAddRow(voiceId));
 });
 
 document.getElementById('seqTheory').textContent=
