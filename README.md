@@ -1,6 +1,6 @@
 # D20 Synth Tools
 
-Central codebase for D20 drum/percussion synthesis experiments. Standalone from the
+D20 drum/percussion synthesis experiments. Standalone from the
 D20 firmware itself (ESP32 is already loaded with platform + drumset-loading duties) --
 this is where synthesis algorithms and tooling get prototyped and learned before any
 hardware integration decision is made.
@@ -45,16 +45,3 @@ AudioWorklet), and a logistic-map chaotic noise source (Chaos Perc).
 - D20's current trigger/velocity input format hasn't been cross-checked against this
   tool's parameter set yet.
 
-## Status
-
-base1 committed. Not yet wired into the D20 firmware.
-
-## Workflow
-
-Starting this session: every iteration (prompt/response) that changes a file in this
-repo gets an automatic local commit, so history stays granular without asking each
-time. Edits are written straight to this file on disk (no intermediate "delivered
-file" step) -- you'll see the git commit, not a repeated file card. This only
-commits locally -- nothing is pushed to GitHub automatically. Push manually via
-GitHub Desktop or `gh repo create/push` (see top of this file) whenever you want a
-snapshot public/backed up.
