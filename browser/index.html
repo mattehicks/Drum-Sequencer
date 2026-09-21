@@ -2899,7 +2899,10 @@ document.addEventListener('keydown', (e)=>{
 const seqAddRowBtn=document.getElementById('seqAddRowBtn');
 seqAddRowBtn.addEventListener('click', (e)=>{
   e.stopPropagation();
-  openVoicePicker(seqAddRowBtn, null, (voiceId)=> seqAddRow(voiceId));
+  // No picker -- just add a blank row on the first voice; the instrument
+  // badge on the new row (like every row's) opens the same picker if you
+  // want to change it.
+  seqAddRow(VOICES[0].id);
 });
 
 /* ---------- generic context menu (right-click) ---------- */
