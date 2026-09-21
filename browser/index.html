@@ -74,12 +74,30 @@ body{
   color:var(--subtext);
 }
 .toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:14px;
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:8px;
   padding:10px 16px;
 }
 .master{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+.file-ctrl{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.file-btn{
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:600;
+  background:var(--panel-2);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:8px 14px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.file-btn:hover{border-color:var(--accent-2); color:var(--accent-2);}
 .engine-btn{
   font-family:var(--mono);
   font-size:13px;
@@ -613,6 +631,9 @@ canvas{
       <label class="master-vol">Master
         <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8">
       </label>
+    </div>
+    <div class="file-ctrl">
+      <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
     </div>
   </div>
 
@@ -1921,6 +1942,57 @@ engineBtn.addEventListener('click', async ()=>{
 masterVolInput.addEventListener('input', ()=>{
   if(master) master.gain.setTargetAtTime(parseFloat(masterVolInput.value), ctx.currentTime, 0.01);
 });
+
+/* ---------- save project ---------- */
+// Snapshots everything a session has built: sequencer (bpm, measure/slot
+// layout, rows, patterns), every voice's live param values, and which
+// voices are duplicates (id/name/key plus clonedFrom, so a future loader
+// can rebuild a clone from its source's trigger function/theory rather
+// than trying to serialize a function). Downloads as a timestamped .json
+// file -- there's no server here, so a browser download is the save.
+
+function collectProjectState(){
+  const rowIds=seq.rows.map(r=>r.id);
+  return {
+    format:'d20-synth-project',
+    version:1,
+    savedAt:new Date().toISOString(),
+    masterVolume:parseFloat(masterVolInput.value),
+    sequencer:{
+      bpm:seq.bpm,
+      beatsPerMeasure:seq.beatsPerMeasure,
+      groupSlots:seq.groupSlots.slice(),
+      rows:seq.rows.map(r=>({id:r.id, voiceId:r.voiceId})),
+      pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()]))
+    },
+    voices:VOICES.map(v=>({
+      id:v.id,
+      name:v.name,
+      key:v.key,
+      isClone:!!v.isClone,
+      clonedFrom:v.clonedFrom||null,
+      params:{...state.voices[v.id]}
+    }))
+  };
+}
+
+function saveProject(){
+  const data=collectProjectState();
+  const json=JSON.stringify(data, null, 2);
+  const blob=new Blob([json], {type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const stamp=data.savedAt.replace(/[:.]/g,'-').slice(0,19);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='d20-synth-project-'+stamp+'.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showHint('Project saved.');
+}
+
+document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
 
 window.addEventListener('keydown', (e)=>{
   if(e.repeat) return;
