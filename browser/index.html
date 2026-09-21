@@ -254,21 +254,6 @@ canvas{
   outline:2px solid var(--accent);
   outline-offset:1px;
 }
-.seq-row-del{
-  flex:none;
-  width:18px; height:18px;
-  padding:0;
-  display:flex; align-items:center; justify-content:center;
-  font-size:10px;
-  line-height:1;
-  background:transparent;
-  color:var(--subtext);
-  border:1px solid var(--border);
-  border-radius:4px;
-  cursor:pointer;
-}
-.seq-row-del:hover:not(:disabled){color:var(--bg); background:#ff5a5a; border-color:#ff5a5a;}
-.seq-row-del:disabled{opacity:0.25; cursor:default;}
 .seq-add-row{
   margin-top:10px;
   font-family:var(--mono);
@@ -455,6 +440,35 @@ canvas{
 .voice-picker-item:hover{background:var(--panel);}
 .voice-picker-item.active{color:var(--accent);}
 .voice-picker-item .voice-key{width:16px; height:16px; font-size:9px; border-radius:3px;}
+
+.context-menu{
+  position:fixed;
+  z-index:60;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:5px;
+  min-width:140px;
+  box-shadow:0 10px 28px rgba(0,0,0,0.45);
+}
+.context-menu[hidden]{display:none;}
+.context-menu-item{
+  display:block;
+  width:100%;
+  text-align:left;
+  background:transparent;
+  border:none;
+  border-radius:5px;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:7px 10px;
+  cursor:pointer;
+}
+.context-menu-item:hover:not(:disabled){background:var(--panel);}
+.context-menu-item.danger{color:#ff6b6b;}
+.context-menu-item.danger:hover:not(:disabled){background:rgba(255,90,90,0.14);}
+.context-menu-item:disabled{opacity:0.35; cursor:default;}
 .pad{
   width:100%;
   padding:12px;
@@ -1336,19 +1350,16 @@ function renderSequencer(){
       e.stopPropagation();
       openVoicePicker(keyBadge, row.voiceId, (voiceId)=> seqSetRowVoice(row.id, voiceId));
     });
+    label.title='Right-click row for options';
     label.appendChild(keyBadge);
     label.appendChild(document.createTextNode(voice.name));
     rowEl.appendChild(label);
 
-    const delBtn=document.createElement('button');
-    delBtn.type='button';
-    delBtn.className='seq-row-del';
-    delBtn.textContent='✕';
-    delBtn.title='Delete row';
-    delBtn.setAttribute('aria-label', 'Delete '+voice.name+' row');
-    delBtn.disabled=seq.rows.length<=1;
-    delBtn.addEventListener('click', ()=> seqDeleteRow(row.id));
-    rowEl.appendChild(delBtn);
+    rowEl.addEventListener('contextmenu', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      openRowContextMenu(e.clientX, e.clientY, row.id);
+    });
 
     const cells=document.createElement('div');
     cells.className='seq-cells';
@@ -1557,6 +1568,53 @@ const seqAddRowBtn=document.getElementById('seqAddRowBtn');
 seqAddRowBtn.addEventListener('click', (e)=>{
   e.stopPropagation();
   openVoicePicker(seqAddRowBtn, null, (voiceId)=> seqAddRow(voiceId));
+});
+
+/* ---------- row context menu (right-click) ---------- */
+
+const rowContextMenu=document.createElement('div');
+rowContextMenu.className='context-menu';
+rowContextMenu.id='rowContextMenu';
+rowContextMenu.hidden=true;
+document.body.appendChild(rowContextMenu);
+
+function openRowContextMenu(clientX, clientY, rowId){
+  rowContextMenu.innerHTML='';
+
+  const delItem=document.createElement('button');
+  delItem.type='button';
+  delItem.className='context-menu-item danger';
+  delItem.textContent='Delete Row';
+  delItem.disabled=seq.rows.length<=1;
+  delItem.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    seqDeleteRow(rowId);
+    closeRowContextMenu();
+  });
+  rowContextMenu.appendChild(delItem);
+
+  rowContextMenu.hidden=false;
+  const menuRect=rowContextMenu.getBoundingClientRect();
+  let left=Math.min(clientX, window.innerWidth-menuRect.width-8);
+  let top=Math.min(clientY, window.innerHeight-menuRect.height-8);
+  left=Math.max(8, left);
+  top=Math.max(8, top);
+  rowContextMenu.style.left=left+'px';
+  rowContextMenu.style.top=top+'px';
+}
+
+function closeRowContextMenu(){
+  rowContextMenu.hidden=true;
+}
+
+document.addEventListener('click', (e)=>{
+  if(!rowContextMenu.hidden && !rowContextMenu.contains(e.target)) closeRowContextMenu();
+});
+document.addEventListener('contextmenu', (e)=>{
+  if(!rowContextMenu.hidden && !rowContextMenu.contains(e.target)) closeRowContextMenu();
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape') closeRowContextMenu();
 });
 
 document.getElementById('seqTheory').textContent=
