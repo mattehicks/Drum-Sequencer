@@ -1,7 +1,7 @@
 {
   "format": "d20-synth-project",
   "version": 1,
-  "savedAt": "2026-09-21T20:45:17.117570Z",
+  "savedAt": "2026-09-21T20:46:16.041729Z",
   "name": "Echoplex (NIN) - reverse-engineered sample",
   "masterVolume": 0.3,
   "sequencer": {
@@ -57,7 +57,7 @@
         false,
         true,
         false,
-        true,
+        false,
         false,
         true,
         false,
@@ -91,7 +91,7 @@
         false,
         false,
         false,
-        true,
+        false,
         false,
         false,
         false,
