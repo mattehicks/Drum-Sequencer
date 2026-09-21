@@ -412,6 +412,137 @@ canvas{
 .seq-flag-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
 .seq-flag-btn.mode-btn.active{background:var(--copy-pink); border-color:var(--copy-pink); color:var(--bg);}
 
+.patterns{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px 16px 16px;
+}
+.patterns-head h2, .arrangement-block h3{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.6px;
+  color:var(--subtext);
+  margin:0 0 10px;
+  font-weight:600;
+}
+.pattern-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  padding:9px 0;
+  border-bottom:1px solid var(--border);
+}
+.pattern-row:last-child{border-bottom:none;}
+.pattern-label{
+  width:66px;
+  flex:none;
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:600;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:5px;
+  padding:6px 8px;
+}
+.pattern-pairs{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.pattern-pair{
+  display:flex;
+  align-items:center;
+  gap:3px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:3px 5px;
+}
+.pattern-pair input[type=number]{
+  width:38px;
+  font-family:var(--mono);
+  font-size:12px;
+  background:transparent;
+  border:none;
+  color:var(--text);
+  text-align:center;
+}
+.pattern-pair input[type=number]:focus-visible{outline:1px solid var(--accent-2); border-radius:3px;}
+.pattern-pair-x{color:var(--subtext); font-size:10px;}
+.pattern-pair-remove{
+  width:16px; height:16px;
+  border:none;
+  background:transparent;
+  color:var(--subtext);
+  cursor:pointer;
+  font-size:11px;
+  line-height:1;
+  border-radius:3px;
+  padding:0;
+}
+.pattern-pair-remove:hover{color:#ff6b6b;}
+.pattern-pair-add{
+  width:22px; height:22px;
+  border-radius:6px;
+  border:1px dashed var(--border);
+  background:transparent;
+  color:var(--subtext);
+  cursor:pointer;
+  font-size:13px;
+  line-height:1;
+  padding:0;
+}
+.pattern-pair-add:hover{color:var(--accent-2); border-color:var(--accent-2);}
+.pattern-preview{
+  flex:1 1 100%;
+  font-family:var(--mono);
+  font-size:10.5px;
+  color:var(--subtext);
+  word-break:break-all;
+}
+.patterns-add{margin-top:10px;}
+.arrangement-block{margin-top:16px; padding-top:14px; border-top:1px solid var(--border);}
+.arrangement-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
+.arrange-pill{
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:700;
+  background:var(--panel-2);
+  color:var(--accent-2);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:6px 14px;
+  cursor:pointer;
+}
+.arrange-pill:hover{border-color:var(--accent-2);}
+.arrangement-preview{
+  margin-top:10px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--subtext);
+  line-height:1.5;
+  word-break:break-all;
+}
+.patterns-apply{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.patterns-apply label{
+  display:flex; align-items:center; gap:8px;
+  font-size:12px; color:var(--subtext); font-family:var(--mono);
+}
+.patterns-apply select{
+  font-family:var(--mono);
+  font-size:12px;
+  background:var(--panel-2);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:6px 8px;
+}
+
 .rack{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
@@ -684,6 +815,26 @@ canvas{
       <summary>Theory</summary>
       <p id="seqTheory"></p>
     </details>
+  </section>
+
+  <section class="patterns" id="patternsSection">
+    <div class="patterns-head"><h2>Text Patterns / Arrangement</h2></div>
+    <div id="patternList"></div>
+    <button type="button" class="seq-add-row patterns-add" id="addPatternBtn">+ Add Pattern</button>
+
+    <div class="arrangement-block">
+      <h3>Arrangement</h3>
+      <div class="arrangement-row" id="arrangementRow"></div>
+      <button type="button" class="seq-add-row" id="addArrangeBtn">+ Add</button>
+      <div class="arrangement-preview" id="arrangementPreview"></div>
+    </div>
+
+    <div class="patterns-apply">
+      <label>Apply to
+        <select id="patternApplyTarget"></select>
+      </label>
+      <button type="button" class="file-btn" id="patternApplyBtn">Apply to Sequencer</button>
+    </div>
   </section>
 
   <section class="rack" id="rack"></section>
@@ -1748,6 +1899,7 @@ function renderSequencer(){
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) positionRowControls(row);
   });
+  updatePatternApplyTargetOptions();
 }
 
 function seqSetRowVoice(rowId, voiceId){
@@ -2055,6 +2207,354 @@ document.addEventListener('keydown', (e)=>{
 document.getElementById('seqTheory').textContent=
   "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. Every row also has a LINKED/OWN TIME flag: by default all rows share that one measure structure, but flipping a row to OWN TIME gives it its own independent groups/slot-count -- its own inline controls appear right under it, with the same slot dials and pink Copy (C) / green Paste (P) buttons as the shared strip above, scoped to that row alone. An independent row also picks a mode: LOOP (true polymeter) keeps the same slot duration as every other row but its own bar length, so its downbeat free-runs against the shared bar and only lines back up every LCM(its steps, the shared steps) slots -- stack a 6-slot row over a 4-slot row in LOOP and they slowly drift in and out of phase. SYNC (polyrhythm) instead stretches that row's own N steps to always fill exactly one shared bar's duration, so it realigns on the downbeat every single bar -- a true 3-over-4 or 5-over-4 feel. None of this stops playback -- beats, slots, copy/paste, linking/unlinking, and adding or deleting rows all rebuild the pattern live (keeping whatever hits still fit) while the transport keeps running.";
 
+/* ---------- text patterns / arrangement ---------- */
+// A compact, text-first way to author long or repetitive measure
+// structures instead of clicking the Beat-N slot dial one measure at a
+// time. A "pattern" is a small collection of (slots, repeat) pairs that
+// expands into a flat measure list -- e.g. 7x4, 2x1, 7x4, 3x1 expands to
+// 7-7-7-7-2-7-7-7-7-3, ten measures typed as four pairs. An "arrangement"
+// is a sequence of pattern references (A, A, B, A, ...) that concatenates
+// their expansions into one long measure list. Apply to Sequencer then
+// hands that list to either the shared structure or one specific row,
+// through the exact same rebuild-in-place path as any other groupSlots
+// edit, so it never stops playback either.
+
+const PATTERN_SLOTS_MIN=SEQ_SLOTS_MIN, PATTERN_SLOTS_MAX=SEQ_SLOTS_MAX;
+const PATTERN_REPEAT_MIN=1, PATTERN_REPEAT_MAX=99;
+const PATTERN_APPLY_MEASURE_CAP=400; // guards against a runaway repeat count building a huge grid
+
+let patternUid=0;
+function newPatternId(){ return 'pat'+(patternUid++); }
+let patternLabelUid=0;
+function nextPatternLabel(){
+  const i=patternLabelUid++;
+  const letter=String.fromCharCode(65+(i%26));
+  const cycle=Math.floor(i/26);
+  return letter+(cycle>0?String(cycle):'');
+}
+
+const patternLib={
+  patterns:[],   // [{id, label, pairs:[{slots,repeat}]}]
+  arrangement:[] // [patternId, ...]
+};
+
+function addPattern(pairs){
+  const p={id:newPatternId(), label:nextPatternLabel(), pairs:pairs || [{slots:4, repeat:1}]};
+  patternLib.patterns.push(p);
+  return p;
+}
+
+function expandPatternPairs(pairs){
+  const out=[];
+  pairs.forEach(pr=>{
+    const slots=Math.min(PATTERN_SLOTS_MAX, Math.max(PATTERN_SLOTS_MIN, Math.round(pr.slots)||PATTERN_SLOTS_MIN));
+    const repeat=Math.min(PATTERN_REPEAT_MAX, Math.max(PATTERN_REPEAT_MIN, Math.round(pr.repeat)||PATTERN_REPEAT_MIN));
+    for(let i=0;i<repeat;i++) out.push(slots);
+  });
+  return out;
+}
+
+function expandArrangement(){
+  const out=[];
+  patternLib.arrangement.forEach(id=>{
+    const pat=patternLib.patterns.find(p=>p.id===id);
+    if(pat) out.push(...expandPatternPairs(pat.pairs));
+  });
+  return out;
+}
+
+function deletePattern(id){
+  if(patternLib.patterns.length<=1){ showHint('At least one pattern is required.'); return; }
+  patternLib.patterns=patternLib.patterns.filter(p=>p.id!==id);
+  patternLib.arrangement=patternLib.arrangement.filter(pid=>pid!==id);
+  renderPatternsSection();
+}
+
+function duplicatePattern(id){
+  const idx=patternLib.patterns.findIndex(p=>p.id===id);
+  if(idx<0) return;
+  const src=patternLib.patterns[idx];
+  const clone={id:newPatternId(), label:nextPatternLabel(), pairs:src.pairs.map(pr=>({...pr}))};
+  patternLib.patterns.splice(idx+1, 0, clone);
+  renderPatternsSection();
+}
+
+function renderPatternsSection(){
+  renderPatternList();
+  renderArrangementRow();
+  updatePatternApplyTargetOptions();
+}
+
+function renderPatternList(){
+  const wrap=document.getElementById('patternList');
+  wrap.innerHTML='';
+  patternLib.patterns.forEach(pat=>{
+    const row=document.createElement('div');
+    row.className='pattern-row';
+    row.title='Right-click for options';
+
+    const labelInput=document.createElement('input');
+    labelInput.type='text'; labelInput.className='pattern-label';
+    labelInput.value=pat.label;
+    labelInput.maxLength=12;
+    labelInput.addEventListener('change', ()=>{
+      const v=labelInput.value.trim();
+      pat.label=v || pat.label;
+      labelInput.value=pat.label;
+      renderArrangementRow();
+    });
+    row.appendChild(labelInput);
+
+    const pairsWrap=document.createElement('div');
+    pairsWrap.className='pattern-pairs';
+
+    const preview=document.createElement('div');
+    preview.className='pattern-preview';
+
+    function updatePreview(){
+      const expanded=expandPatternPairs(pat.pairs);
+      preview.textContent=expanded.join('-')+'  ('+expanded.length+' measures, '+expanded.reduce((a,b)=>a+b,0)+' slots)';
+      renderArrangementRow(); // the arrangement's total depends on every pattern's current expansion
+    }
+
+    function renderPairs(){
+      pairsWrap.innerHTML='';
+      pat.pairs.forEach((pr, i)=>{
+        const pairEl=document.createElement('div');
+        pairEl.className='pattern-pair';
+
+        const slotsInput=document.createElement('input');
+        slotsInput.type='number'; slotsInput.min=PATTERN_SLOTS_MIN; slotsInput.max=PATTERN_SLOTS_MAX; slotsInput.step=1;
+        slotsInput.value=pr.slots;
+        slotsInput.title='Slots for this measure';
+        slotsInput.setAttribute('aria-label', 'Slots for pair '+(i+1)+' of pattern '+pat.label);
+        slotsInput.addEventListener('change', ()=>{
+          pr.slots=Math.min(PATTERN_SLOTS_MAX, Math.max(PATTERN_SLOTS_MIN, Math.round(parseFloat(slotsInput.value))||PATTERN_SLOTS_MIN));
+          slotsInput.value=pr.slots;
+          updatePreview();
+        });
+
+        const x=document.createElement('span'); x.className='pattern-pair-x'; x.textContent='×';
+
+        const repeatInput=document.createElement('input');
+        repeatInput.type='number'; repeatInput.min=PATTERN_REPEAT_MIN; repeatInput.max=PATTERN_REPEAT_MAX; repeatInput.step=1;
+        repeatInput.value=pr.repeat;
+        repeatInput.title='Repeat this many times';
+        repeatInput.setAttribute('aria-label', 'Repeat count for pair '+(i+1)+' of pattern '+pat.label);
+        repeatInput.addEventListener('change', ()=>{
+          pr.repeat=Math.min(PATTERN_REPEAT_MAX, Math.max(PATTERN_REPEAT_MIN, Math.round(parseFloat(repeatInput.value))||PATTERN_REPEAT_MIN));
+          repeatInput.value=pr.repeat;
+          updatePreview();
+        });
+
+        pairEl.appendChild(slotsInput); pairEl.appendChild(x); pairEl.appendChild(repeatInput);
+
+        if(pat.pairs.length>1){
+          const rm=document.createElement('button');
+          rm.type='button'; rm.className='pattern-pair-remove'; rm.textContent='✕';
+          rm.title='Remove this pair';
+          rm.setAttribute('aria-label', 'Remove pair '+(i+1)+' of pattern '+pat.label);
+          rm.addEventListener('click', ()=>{
+            pat.pairs.splice(i,1);
+            renderPairs();
+            updatePreview();
+          });
+          pairEl.appendChild(rm);
+        }
+        pairsWrap.appendChild(pairEl);
+      });
+
+      const addBtn=document.createElement('button');
+      addBtn.type='button'; addBtn.className='pattern-pair-add'; addBtn.textContent='+';
+      addBtn.title='Add a pair';
+      addBtn.setAttribute('aria-label', 'Add a pair to pattern '+pat.label);
+      addBtn.addEventListener('click', ()=>{
+        pat.pairs.push({slots:4, repeat:1});
+        renderPairs();
+        updatePreview();
+      });
+      pairsWrap.appendChild(addBtn);
+    }
+    renderPairs();
+    updatePreview();
+    row.appendChild(pairsWrap);
+    row.appendChild(preview);
+
+    row.addEventListener('contextmenu', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      openContextMenu(e.clientX, e.clientY, [
+        {label:'Duplicate', onSelect:()=> duplicatePattern(pat.id)},
+        {label:'Delete Pattern', danger:true, disabled:patternLib.patterns.length<=1, onSelect:()=> deletePattern(pat.id)}
+      ]);
+    });
+
+    wrap.appendChild(row);
+  });
+}
+
+function renderArrangementRow(){
+  const wrap=document.getElementById('arrangementRow');
+  if(!wrap) return; // a pattern-pair edit can fire this before the section's first full render lands
+  wrap.innerHTML='';
+  patternLib.arrangement.forEach((patId, i)=>{
+    const pat=patternLib.patterns.find(p=>p.id===patId);
+    const pill=document.createElement('button');
+    pill.type='button';
+    pill.className='arrange-pill';
+    pill.textContent=pat ? pat.label : '?';
+    pill.title=pat ? ('Change what this slot plays (currently '+pat.label+')') : 'This pattern no longer exists -- click to pick a new one.';
+    pill.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openPatternPicker(pill, patId, (newId)=>{ patternLib.arrangement[i]=newId; renderArrangementRow(); });
+    });
+    pill.addEventListener('contextmenu', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      openContextMenu(e.clientX, e.clientY, [
+        {label:'Move Left', disabled:i<=0, onSelect:()=>{
+          const t=patternLib.arrangement[i-1]; patternLib.arrangement[i-1]=patternLib.arrangement[i]; patternLib.arrangement[i]=t;
+          renderArrangementRow();
+        }},
+        {label:'Move Right', disabled:i>=patternLib.arrangement.length-1, onSelect:()=>{
+          const t=patternLib.arrangement[i+1]; patternLib.arrangement[i+1]=patternLib.arrangement[i]; patternLib.arrangement[i]=t;
+          renderArrangementRow();
+        }},
+        {label:'Duplicate', onSelect:()=>{ patternLib.arrangement.splice(i+1,0,patId); renderArrangementRow(); }},
+        {label:'Remove', danger:true, onSelect:()=>{ patternLib.arrangement.splice(i,1); renderArrangementRow(); }}
+      ]);
+    });
+    wrap.appendChild(pill);
+  });
+
+  const preview=document.getElementById('arrangementPreview');
+  if(preview){
+    const expanded=expandArrangement();
+    preview.textContent=expanded.length
+      ? expanded.join('-')+'  ('+expanded.length+' measures, '+expanded.reduce((a,b)=>a+b,0)+' slots total)'
+      : 'Empty -- add a pattern above, then + Add here to reference it.';
+  }
+}
+
+/* ---------- floating pattern picker (arrangement slots) ---------- */
+
+const patternPicker=document.createElement('div');
+patternPicker.className='voice-picker';
+patternPicker.id='patternPicker';
+patternPicker.hidden=true;
+document.body.appendChild(patternPicker);
+
+function openPatternPicker(anchorEl, currentPatternId, onSelect){
+  patternPicker.innerHTML='';
+  patternLib.patterns.forEach(pat=>{
+    const item=document.createElement('button');
+    item.type='button';
+    item.className='voice-picker-item'+(pat.id===currentPatternId ? ' active' : '');
+    item.textContent=pat.label+'  ('+expandPatternPairs(pat.pairs).length+' measures)';
+    item.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      onSelect(pat.id);
+      closePatternPicker();
+    });
+    patternPicker.appendChild(item);
+  });
+  patternPicker.hidden=false;
+  const anchorRect=anchorEl.getBoundingClientRect();
+  const pickerRect=patternPicker.getBoundingClientRect();
+  let left=anchorRect.left;
+  let top=anchorRect.bottom+4;
+  left=Math.min(left, window.innerWidth-pickerRect.width-8);
+  left=Math.max(8, left);
+  if(top+pickerRect.height>window.innerHeight-8) top=anchorRect.top-pickerRect.height-4;
+  patternPicker.style.left=left+'px';
+  patternPicker.style.top=top+'px';
+}
+
+function closePatternPicker(){ patternPicker.hidden=true; }
+
+document.addEventListener('click', (e)=>{
+  if(!patternPicker.hidden && !patternPicker.contains(e.target)) closePatternPicker();
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape') closePatternPicker();
+});
+
+/* ---------- apply arrangement to sequencer ---------- */
+
+function updatePatternApplyTargetOptions(){
+  const sel=document.getElementById('patternApplyTarget');
+  if(!sel) return;
+  const prev=sel.value;
+  sel.innerHTML='';
+  const sharedOpt=document.createElement('option');
+  sharedOpt.value='__shared__'; sharedOpt.textContent='Shared (Beats/measure)';
+  sel.appendChild(sharedOpt);
+  seq.rows.forEach(row=>{
+    const voice=VOICES.find(v=>v.id===row.voiceId);
+    const opt=document.createElement('option');
+    opt.value=row.id;
+    opt.textContent=(voice?voice.name:row.id)+(rowIsUnlinked(row)?' (own time)':'');
+    sel.appendChild(opt);
+  });
+  if(Array.from(sel.options).some(o=>o.value===prev)) sel.value=prev;
+}
+
+function applyArrangementToSequencer(){
+  let expanded=expandArrangement();
+  if(!expanded.length){ showHint('Build a pattern and an arrangement first.'); return; }
+  if(expanded.length>PATTERN_APPLY_MEASURE_CAP){
+    expanded=expanded.slice(0, PATTERN_APPLY_MEASURE_CAP);
+    showHint('Arrangement truncated to '+PATTERN_APPLY_MEASURE_CAP+' measures.');
+  }
+  const target=document.getElementById('patternApplyTarget').value;
+  if(target==='__shared__'){
+    const old=seq.groupSlots.slice();
+    seq.groupSlots=expanded.slice();
+    seq.beatsPerMeasure=expanded.length;
+    seqRebuildLinkedPatterns(old, seq.groupSlots);
+    renderSequencer();
+    updateSeqMeasureUI();
+    showHint('Arrangement applied to the shared measure structure.');
+  }else{
+    const row=seq.rows.find(r=>r.id===target);
+    if(!row){ showHint('That row no longer exists.'); return; }
+    const old=rowIsUnlinked(row) ? row.groupSlots.slice() : seq.groupSlots.slice();
+    row.unlinked=true;
+    row.mode=row.mode||'loop';
+    row.groupSlots=expanded.slice();
+    seqRebuildRowPattern(row, old, row.groupSlots);
+    renderSequencer();
+    const voice=VOICES.find(v=>v.id===row.voiceId);
+    showHint('Arrangement applied to '+(voice?voice.name:'that row')+'.');
+  }
+}
+
+document.getElementById('addPatternBtn').addEventListener('click', ()=>{
+  addPattern();
+  renderPatternsSection();
+});
+
+document.getElementById('addArrangeBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  if(!patternLib.patterns.length){ showHint('Add a pattern first.'); return; }
+  const defaultId=patternLib.patterns[0].id;
+  patternLib.arrangement.push(defaultId);
+  renderArrangementRow();
+  const pills=document.querySelectorAll('#arrangementRow .arrange-pill');
+  const lastPill=pills[pills.length-1];
+  const lastIdx=patternLib.arrangement.length-1;
+  if(lastPill) openPatternPicker(lastPill, defaultId, (newId)=>{ patternLib.arrangement[lastIdx]=newId; renderArrangementRow(); });
+});
+
+document.getElementById('patternApplyBtn').addEventListener('click', applyArrangementToSequencer);
+
+// Seed with the exact example from the design brief: Pattern A = 7x4, 2x1,
+// 7x4, 3x1 (-> 7-7-7-7-2-7-7-7-7-3), Pattern B = 4x3, 3x2, 4x3
+// (-> 4-4-4-3-3-4-4-4), Arrangement = A, A, B, A.
+(function seedPatternLib(){
+  const a=addPattern([{slots:7, repeat:4}, {slots:2, repeat:1}, {slots:7, repeat:4}, {slots:3, repeat:1}]);
+  const b=addPattern([{slots:4, repeat:3}, {slots:3, repeat:2}, {slots:4, repeat:3}]);
+  patternLib.arrangement.push(a.id, a.id, b.id, a.id);
+})();
+
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
 const KS_WORKLET_CODE=
@@ -2277,6 +2777,10 @@ function collectProjectState(){
       })),
       pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()]))
     },
+    textPatterns:{
+      patterns:patternLib.patterns.map(p=>({id:p.id, label:p.label, pairs:p.pairs.map(pr=>({slots:pr.slots, repeat:pr.repeat}))})),
+      arrangement:patternLib.arrangement.slice()
+    },
     voices:VOICES.map(v=>({
       id:v.id,
       name:v.name,
@@ -2399,6 +2903,21 @@ function applyProjectState(data){
   renderSequencer();
   updateSeqMeasureUI();
 
+  const tp=data.textPatterns;
+  if(tp && Array.isArray(tp.patterns) && tp.patterns.length){
+    patternLib.patterns=tp.patterns.map(p=>({
+      id:p.id || newPatternId(),
+      label:p.label || nextPatternLabel(),
+      pairs:(Array.isArray(p.pairs) && p.pairs.length) ? p.pairs.map(pr=>({slots:pr.slots||4, repeat:pr.repeat||1})) : [{slots:4, repeat:1}]
+    }));
+    patternLib.arrangement=Array.isArray(tp.arrangement) ? tp.arrangement.slice() : [];
+    // Keep future auto-ids/labels clear of anything this file already used.
+    let maxPatNum=-1;
+    patternLib.patterns.forEach(p=>{ const m=/^pat(\d+)$/.exec(p.id); if(m) maxPatNum=Math.max(maxPatNum, parseInt(m[1],10)); });
+    patternUid=Math.max(patternUid, maxPatNum+1);
+    renderPatternsSection();
+  }
+
   if(typeof data.masterVolume==='number'){
     masterVolInput.value=data.masterVolume;
     if(master && ctx) master.gain.setTargetAtTime(data.masterVolume, ctx.currentTime, 0.01);
@@ -2454,6 +2973,7 @@ window.addEventListener('keydown', (e)=>{
 renderVoices();
 renderSequencer();
 updateSeqMeasureUI();
+renderPatternsSection();
 
 })();
 </script>
