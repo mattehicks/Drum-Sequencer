@@ -11,13 +11,17 @@
   --accent-2:#52d7c4;
   --copy-pink:#ff4fa3;
   --paste-green:#3ddc6a;
-  /* RGB triples of the four accent colors above, for rgba(var(--x-rgb),a)
+  --mute-red:#ff6b6b;
+  --solo-yellow:#ffd83d;
+  /* RGB triples of the accent colors above, for rgba(var(--x-rgb),a)
      glass tints -- keep these in sync with the hex values by hand, there's
      no CSS color-to-rgb() cast available here. */
   --accent-rgb:255,138,61;
   --accent-2-rgb:82,215,196;
   --copy-pink-rgb:255,79,163;
   --paste-green-rgb:61,220,106;
+  --mute-red-rgb:255,107,107;
+  --solo-yellow-rgb:255,216,61;
   --glass-rgb:255,255,255; /* per-button override; see the glassmorphism block below */
   /* Base step-cell geometry for the sequencer grid at 100% zoom -- rows only
      ever grow wider (scroll), not taller or denser, as slot/beat count
@@ -108,7 +112,7 @@ body{
    Each participating class keeps its own font/size/padding/shape; only
    background/border/shadow are centralized here. */
 .file-btn, .engine-btn, .seq-play, .seq-clear, .seq-add-row, .seq-beats-btn,
-.seq-copy-btn, .seq-paste-btn, .seq-flag-btn, .pattern-pair-add,
+.seq-copy-btn, .seq-paste-btn, .seq-flag-btn, .seq-mute-btn, .seq-solo-btn, .pattern-pair-add,
 .arrange-pill, .pad{
   position:relative;
   overflow:hidden;
@@ -125,7 +129,7 @@ body{
   transition:box-shadow 120ms, border-color 120ms, background 120ms, color 120ms;
 }
 .file-btn::before, .engine-btn::before, .seq-play::before, .seq-clear::before, .seq-add-row::before, .seq-beats-btn::before,
-.seq-copy-btn::before, .seq-paste-btn::before, .seq-flag-btn::before, .pattern-pair-add::before,
+.seq-copy-btn::before, .seq-paste-btn::before, .seq-flag-btn::before, .seq-mute-btn::before, .seq-solo-btn::before, .pattern-pair-add::before,
 .arrange-pill::before, .pad::before{
   content:'';
   position:absolute;
@@ -517,6 +521,54 @@ canvas{
     linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--accent-2-rgb),0.4);
 }
+.seq-mutesolo-toggle.active{
+  color:var(--solo-yellow);
+  border-color:rgba(var(--solo-yellow-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--solo-yellow-rgb),0.4), rgba(var(--solo-yellow-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--solo-yellow-rgb),0.4);
+}
+/* Every row gets its own Mute/Solo strip, but it's hidden by default (the
+   opposite default from .seq-group-ctrls above) -- the M/S button in the
+   header reveals it for every row at once, same toggle mechanism as Hide
+   Bars just inverted, since this one starts off rather than on. */
+.seq-mutesolo-ctrls{
+  display:none;
+  align-items:center;
+  gap:6px;
+  margin-top:8px;
+}
+#sequencer.seq-show-mutesolo .seq-mutesolo-ctrls{display:flex;}
+.seq-mute-btn, .seq-solo-btn{
+  --glass-rgb:154,150,145;
+  width:24px; height:24px;
+  border-radius:5px;
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  color:var(--subtext);
+}
+.seq-mute-btn:hover{border-color:rgba(var(--mute-red-rgb),0.6); color:var(--mute-red);}
+.seq-solo-btn:hover{border-color:rgba(var(--solo-yellow-rgb),0.6); color:var(--solo-yellow);}
+.seq-mute-btn.active{
+  color:var(--mute-red);
+  border-color:rgba(var(--mute-red-rgb),0.85);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--mute-red-rgb),0.42), rgba(var(--mute-red-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--mute-red-rgb),0.45);
+}
+.seq-solo-btn.active{
+  color:var(--solo-yellow);
+  border-color:rgba(var(--solo-yellow-rgb),0.85);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--solo-yellow-rgb),0.42), rgba(var(--solo-yellow-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--solo-yellow-rgb),0.45);
+}
+.seq-mutesolo-label{font-size:10px; color:var(--subtext); font-family:var(--mono);}
 .seq-group-ctrl{
   position:absolute;
   top:0;
@@ -581,8 +633,9 @@ canvas{
   min-width:38px;
 }
 
-.seq-row-block{display:flex; flex-direction:column;}
+.seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
+.seq-row-block.seq-row-silenced{opacity:0.4;}
 .seq-row-flags{display:flex; align-items:center; gap:4px;}
 .seq-row-vol{
   flex:none;
@@ -1070,6 +1123,7 @@ canvas{
         <button type="button" class="seq-beats-btn" id="seqZoomIn" aria-label="Zoom in the sequencer grid">+</button>
       </div>
       <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Hide the per-beat slot-count/copy/paste strips (the shared one and every row's own) to save vertical space">Hide Bars</button>
+      <button type="button" class="seq-clear seq-mutesolo-toggle" id="seqMuteSoloToggleBtn" aria-pressed="false" title="Show a Mute / Solo strip under every row">M/S</button>
     </div>
     <div class="seq-body" id="seqBody">
       <div id="seqRows"></div>
@@ -1911,6 +1965,27 @@ function rowSetVolume(row, value){
   row.volume=Math.min(100, Math.max(0, Math.round(value)));
 }
 
+// True if this row shouldn't sound right now: either it's muted directly,
+// or some OTHER row is soloed and this one isn't (standard mixer solo --
+// any number of rows can be soloed at once, and while at least one is,
+// everything un-soloed goes quiet regardless of its own mute state).
+function rowIsSilenced(row){
+  if(row.muted) return true;
+  return seq.rows.some(r=>r.solo) && !row.solo;
+}
+
+// Dims every row's block to match its current silenced state, without a
+// full renderSequencer() -- mute/solo don't touch grid geometry, and solo
+// can flip every OTHER row's silenced state at once, so this is a cheap
+// pass over just the one CSS class rather than a full rebuild.
+function updateRowSilencedStyles(){
+  seq.rows.forEach(row=>{
+    const cellsEl=document.querySelector('.step[data-row="'+row.id+'"]');
+    const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
+    if(blockEl) blockEl.classList.toggle('seq-row-silenced', rowIsSilenced(row));
+  });
+}
+
 function rowSetUnlinked(row, unlinked){
   if(unlinked===rowIsUnlinked(row)) return;
   if(unlinked){
@@ -1980,7 +2055,7 @@ function seqClearAllPlayheads(){
 
 function triggerRowStep(row, idx, time){
   const pat=seq.pattern[row.id];
-  if(pat && pat[idx]){
+  if(pat && pat[idx] && !rowIsSilenced(row)){
     const voice=VOICES.find(v=>v.id===row.voiceId);
     if(voice){
       const baseParams=state.voices[row.voiceId];
@@ -2289,6 +2364,7 @@ function renderSequencer(){
     const block=document.createElement('div');
     block.className='seq-row-block';
     block.dataset.linked=String(!unlinked);
+    block.classList.toggle('seq-row-silenced', rowIsSilenced(row));
 
     const rowEl=document.createElement('div');
     rowEl.className='seq-row';
@@ -2400,6 +2476,44 @@ function renderSequencer(){
       inlineCtrls.className='seq-group-ctrls';
       block.appendChild(inlineCtrls);
     }
+
+    // Every row gets a Mute/Solo strip -- unlike the per-beat controls
+    // above, this isn't tied to linked/unlinked -- but it stays hidden
+    // (see the CSS) until the M/S button in the header reveals it for
+    // every row at once.
+    const muteSoloCtrls=document.createElement('div');
+    muteSoloCtrls.className='seq-mutesolo-ctrls';
+    const muteBtn=document.createElement('button');
+    muteBtn.type='button';
+    muteBtn.className='seq-mute-btn'+(row.muted?' active':'');
+    muteBtn.textContent='M';
+    muteBtn.title='Mute '+voice.name+' in this pattern';
+    muteBtn.setAttribute('aria-label', 'Mute '+voice.name);
+    muteBtn.setAttribute('aria-pressed', String(!!row.muted));
+    muteBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      row.muted=!row.muted;
+      muteBtn.classList.toggle('active', row.muted);
+      muteBtn.setAttribute('aria-pressed', String(row.muted));
+      updateRowSilencedStyles();
+    });
+    const soloBtn=document.createElement('button');
+    soloBtn.type='button';
+    soloBtn.className='seq-solo-btn'+(row.solo?' active':'');
+    soloBtn.textContent='S';
+    soloBtn.title='Solo '+voice.name+' -- while any row is soloed, only soloed rows play';
+    soloBtn.setAttribute('aria-label', 'Solo '+voice.name);
+    soloBtn.setAttribute('aria-pressed', String(!!row.solo));
+    soloBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      row.solo=!row.solo;
+      soloBtn.classList.toggle('active', row.solo);
+      soloBtn.setAttribute('aria-pressed', String(row.solo));
+      updateRowSilencedStyles();
+    });
+    muteSoloCtrls.appendChild(muteBtn);
+    muteSoloCtrls.appendChild(soloBtn);
+    block.appendChild(muteSoloCtrls);
 
     body.appendChild(block);
   });
@@ -2714,6 +2828,23 @@ function seqApplyBarsVisibility(){
 seqBarsToggleBtn.addEventListener('click', ()=>{
   seqBarsHidden=!seqBarsHidden;
   seqApplyBarsVisibility();
+});
+
+// Same idea as Hide Bars above, just inverted -- the Mute/Solo strip under
+// every row starts OFF (most of the time you don't need it) and this
+// reveals it for every row at once instead of hiding something shown by
+// default. Also a view preference: mute/solo state itself lives on each
+// row and works whether or not the strip is visible.
+const seqMuteSoloToggleBtn=document.getElementById('seqMuteSoloToggleBtn');
+let seqMuteSoloShown=false;
+function seqApplyMuteSoloVisibility(){
+  sequencerEl.classList.toggle('seq-show-mutesolo', seqMuteSoloShown);
+  seqMuteSoloToggleBtn.classList.toggle('active', seqMuteSoloShown);
+  seqMuteSoloToggleBtn.setAttribute('aria-pressed', String(seqMuteSoloShown));
+}
+seqMuteSoloToggleBtn.addEventListener('click', ()=>{
+  seqMuteSoloShown=!seqMuteSoloShown;
+  seqApplyMuteSoloVisibility();
 });
 
 /* ---------- floating instrument picker ---------- */
@@ -3408,7 +3539,9 @@ function collectProjectState(){
         unlinked:!!r.unlinked,
         groupSlots:r.unlinked ? r.groupSlots.slice() : undefined,
         mode:r.unlinked ? (r.mode||'loop') : undefined,
-        volume:r.volume!=null ? r.volume : undefined
+        volume:r.volume!=null ? r.volume : undefined,
+        muted:r.muted ? true : undefined,
+        solo:r.solo ? true : undefined
       })),
       pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()]))
     },
@@ -3511,6 +3644,8 @@ function applyProjectState(data){
       row.mode=(r.mode==='sync') ? 'sync' : 'loop';
     }
     if(typeof r.volume==='number') row.volume=Math.min(100, Math.max(0, Math.round(r.volume)));
+    if(r.muted) row.muted=true;
+    if(r.solo) row.solo=true;
     return row;
   }) : seq.rows;
   SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
@@ -3612,6 +3747,7 @@ renderSequencer();
 updateSeqMeasureUI();
 seqApplyZoom();
 seqApplyBarsVisibility();
+seqApplyMuteSoloVisibility();
 renderPatternsSection();
 
 })();
