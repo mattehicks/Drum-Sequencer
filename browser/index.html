@@ -1158,6 +1158,8 @@ canvas{
       <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
       <button id="loadProjectBtn" class="file-btn" type="button">Load Project</button>
       <input type="file" id="loadProjectInput" accept="application/json,.json" hidden>
+      <button id="importInstrumentsBtn" class="file-btn" type="button" title="Load just the instrument/synth settings from a project or instruments file, without touching the sequencer">Import Instruments</button>
+      <input type="file" id="importInstrumentsInput" accept="application/json,.json" hidden>
     </div>
   </div>
 
@@ -4071,11 +4073,18 @@ document.getElementById('saveProjectBtn').addEventListener('click', saveProject)
 // instead (source always appears earlier in the file, since VOICES is only
 // ever appended to, never reordered, so a forward pass always resolves it).
 
-function applyProjectState(data){
-  if(seq.playing) seqStop();
+// Rebuilds VOICES/state.voices from an array of saved voice descriptors --
+// the same shape collectProjectState() writes to project.voices. Shared by
+// a full project load and by Import Instruments, which applies only this
+// slice of a file (project or standalone instruments export) and leaves
+// the sequencer/patterns/rows untouched. Returns whether anything was
+// actually applied, since an empty/missing voices array (the two sample
+// songs ship with one on purpose, so loading them doesn't touch whatever
+// synth the user was already dialed in) is a no-op, not an error.
+function applyVoicesState(savedVoices){
+  if(!Array.isArray(savedVoices) || !savedVoices.length) return false;
 
   const stockVoices=VOICES.filter(v=>!v.isClone);
-  const savedVoices=Array.isArray(data.voices) ? data.voices : [];
   const rebuilt=[];
   const byId={};
   const newVoiceState={};
@@ -4109,14 +4118,21 @@ function applyProjectState(data){
     }
   });
 
-  if(rebuilt.length){
-    VOICES.length=0;
-    VOICES.push(...rebuilt);
-    for(const k in state.voices) delete state.voices[k];
-    Object.assign(state.voices, newVoiceState);
-    for(const k in pads) delete pads[k];
-    renderVoices();
-  }
+  if(!rebuilt.length) return false;
+
+  VOICES.length=0;
+  VOICES.push(...rebuilt);
+  for(const k in state.voices) delete state.voices[k];
+  Object.assign(state.voices, newVoiceState);
+  for(const k in pads) delete pads[k];
+  renderVoices();
+  return true;
+}
+
+function applyProjectState(data){
+  if(seq.playing) seqStop();
+
+  applyVoicesState(Array.isArray(data.voices) ? data.voices : []);
 
   const s=data.sequencer||{};
   seq.bpm=typeof s.bpm==='number' ? s.bpm : seq.bpm;
@@ -4217,6 +4233,42 @@ loadProjectInput.addEventListener('change', ()=>{
     }
     seqSaveFileHandle=null; // this file wasn't opened via the Save picker -- don't let a later Save silently overwrite whatever the handle used to point at
     applyProjectState(data);
+  };
+  reader.onerror=()=>{ showHint('Could not read that file.'); };
+  reader.readAsText(file);
+});
+
+/* ---------- import instruments ---------- */
+// Loads just the synth/instrument side of a file -- accepts a full project
+// export (format:'d20-synth-project', pulling its .voices) or a standalone
+// instruments file that's just {voices:[...]}, and tolerates a bare array
+// too. Everything else in the file (sequencer, patterns, project name) is
+// ignored, unlike Load Project which replaces the whole session.
+const importInstrumentsBtn=document.getElementById('importInstrumentsBtn');
+const importInstrumentsInput=document.getElementById('importInstrumentsInput');
+
+importInstrumentsBtn.addEventListener('click', ()=> importInstrumentsInput.click());
+
+importInstrumentsInput.addEventListener('change', ()=>{
+  const file=importInstrumentsInput.files[0];
+  importInstrumentsInput.value=''; // so choosing the same file again still fires 'change'
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let data;
+    try{
+      data=JSON.parse(reader.result);
+    }catch(err){
+      showHint('Could not import: not valid JSON.');
+      return;
+    }
+    const savedVoices=Array.isArray(data) ? data : (data && Array.isArray(data.voices) ? data.voices : null);
+    if(!savedVoices || !savedVoices.length){
+      showHint('No instruments found in that file.');
+      return;
+    }
+    const ok=applyVoicesState(savedVoices);
+    showHint(ok ? 'Instruments imported.' : 'No instruments found in that file.');
   };
   reader.onerror=()=>{ showHint('Could not read that file.'); };
   reader.readAsText(file);
