@@ -447,15 +447,26 @@ canvas{
 }
 .step.group-start:not(:first-child){margin-left:var(--seq-group-gap);}
 .step.on{
+  /* --cell-vel (0.25-1, set per cell by seqApplyCellVelStyle from that
+     step's own velocity) scales every accent alpha below, so a quiet step
+     reads as visibly dimmer than a loud one -- shift+drag a cell to set it. */
   --glass-rgb:var(--accent-rgb);
-  border-color:rgba(var(--accent-rgb),0.85);
+  border-color:rgba(var(--accent-rgb),calc(0.85*var(--cell-vel,1)));
   background:
     linear-gradient(165deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.06) 45%, rgba(255,255,255,0) 65%),
-    linear-gradient(rgba(var(--accent-rgb),0.55), rgba(var(--accent-rgb),0.28));
+    linear-gradient(rgba(var(--accent-rgb),calc(0.55*var(--cell-vel,1))), rgba(var(--accent-rgb),calc(0.28*var(--cell-vel,1))));
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.4),
     inset 0 -8px 12px rgba(0,0,0,0.22),
-    0 0 14px rgba(var(--accent-rgb),0.55);
+    0 0 14px rgba(var(--accent-rgb),calc(0.55*var(--cell-vel,1)));
+}
+.step.vel-dragging{
+  border-color:var(--accent-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    inset 0 -8px 12px rgba(0,0,0,0.22),
+    0 0 0 2px rgba(var(--accent-2-rgb),0.85),
+    0 0 12px rgba(var(--accent-2-rgb),0.5);
 }
 .step.seq-current{
   border-color:rgba(var(--accent-2-rgb),0.9);
@@ -1943,7 +1954,15 @@ const seq={
     row2: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
     row3: new Array(SEQ_STEPS).fill(false),
     row4: new Array(SEQ_STEPS).fill(false)
-  }
+  },
+  // Per-step velocity (0-100, default 100), keyed and indexed the same way
+  // as pattern but tracked separately -- a step's on/off state and its
+  // volume are independent, so turning a step off and back on again doesn't
+  // lose whatever level it was set to. Sparse on purpose: renderSequencer
+  // lazily fills in row id/length gaps the same way it already does for
+  // pattern, so most entries only ever exist once a cell is actually
+  // shift-dragged away from the 100 default.
+  velocity:{}
 };
 
 let seqMasterStep=0;
@@ -1991,6 +2010,68 @@ function rowMode(row){ return rowIsUnlinked(row) ? (row.mode||'loop') : 'linked'
 function rowVolume(row){ return row.volume==null ? 100 : row.volume; }
 function rowSetVolume(row, value){
   row.volume=Math.min(100, Math.max(0, Math.round(value)));
+}
+
+// Per-step velocity (0-100, default 100) -- a second, independent trim on
+// top of rowVolume, set by shift+dragging a single step cell rather than
+// the row's volume box. Combines multiplicatively with rowVolume in
+// triggerRowStep, same as a normal velocity-sensitive step sequencer.
+function rowCellVelocity(row, idx){
+  const vel=seq.velocity[row.id];
+  const v=vel ? vel[idx] : null;
+  return v==null ? 100 : v;
+}
+function rowSetCellVelocity(row, idx, value){
+  const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+  vel[idx]=Math.min(100, Math.max(0, Math.round(value)));
+}
+// Maps a 0-100 velocity to the brightness fraction a step cell is drawn
+// at. Floored at 25% rather than fading to black at velocity 0 -- a fully
+// dark "on" cell would be too easy to mistake for one that's off.
+function seqCellVelFrac(v){
+  const clamped=Math.min(100, Math.max(0, v==null?100:v));
+  return 0.25+0.75*(clamped/100);
+}
+// Applies a step button's current velocity as both its visual brightness
+// (the --cell-vel custom property .step.on's CSS reads) and its tooltip.
+// Called on initial render and again on every shift-drag move, so the two
+// call sites (renderSequencer, seqBeginCellVolDrag) always agree.
+function seqApplyCellVelStyle(btn, row, idx){
+  const v=rowCellVelocity(row, idx);
+  btn.style.setProperty('--cell-vel', seqCellVelFrac(v).toFixed(3));
+  btn.title='Step '+(idx+1)+' — velocity '+v+' (shift+drag to adjust)';
+}
+// Shift+dragging a step cell sets its velocity instead of toggling it --
+// same diagonal drag-to-adjust gesture as seqWireVolBox (the row volume
+// box), just scoped to one cell via pointer capture rather than a
+// dedicated control. Turns the step on, since adjusting the volume of a
+// step that isn't playing wouldn't mean anything.
+const SEQ_CELL_VEL_DRAG_SENSITIVITY=1; // velocity units per px of diagonal travel
+function seqBeginCellVolDrag(btn, row, idx, startEvent){
+  startEvent.preventDefault();
+  startEvent.stopPropagation();
+  const pat=seq.pattern[row.id];
+  if(pat){ pat[idx]=true; btn.classList.add('on'); }
+  const startX=startEvent.clientX, startY=startEvent.clientY;
+  const startVal=rowCellVelocity(row, idx);
+  btn.classList.add('vel-dragging');
+  btn.setPointerCapture(startEvent.pointerId);
+  const onMove=(e)=>{
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    const delta=(dx-dy)*SEQ_CELL_VEL_DRAG_SENSITIVITY;
+    rowSetCellVelocity(row, idx, startVal+delta);
+    seqApplyCellVelStyle(btn, row, idx);
+  };
+  const end=(e)=>{
+    btn.classList.remove('vel-dragging');
+    try{ btn.releasePointerCapture(e.pointerId); }catch(err){}
+    btn.removeEventListener('pointermove', onMove);
+    btn.removeEventListener('pointerup', end);
+    btn.removeEventListener('pointercancel', end);
+  };
+  btn.addEventListener('pointermove', onMove);
+  btn.addEventListener('pointerup', end);
+  btn.addEventListener('pointercancel', end);
 }
 
 // True if this row shouldn't sound right now: either it's muted directly,
@@ -2087,10 +2168,11 @@ function triggerRowStep(row, idx, time){
     const voice=VOICES.find(v=>v.id===row.voiceId);
     if(voice){
       const baseParams=state.voices[row.voiceId];
-      const vol=rowVolume(row)/100;
-      // A per-row trim, not the voice's own Level -- only scale the params
-      // actually passed to THIS trigger call, so other rows/pads sharing
-      // the same voice are unaffected.
+      // Row volume and this one step's own velocity both trim the level,
+      // multiplicatively -- neither is the voice's own Level, so only the
+      // params passed to THIS trigger call are scaled, leaving other
+      // rows/pads sharing the same voice unaffected.
+      const vol=(rowVolume(row)/100)*(rowCellVelocity(row, idx)/100);
       const params=(vol===1 || !baseParams) ? baseParams : {...baseParams, level:(baseParams.level||0)*vol};
       voice.trigger(params, time);
     }
@@ -2398,6 +2480,11 @@ function renderSequencer(){
     const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
     while(pat.length<steps) pat.push(false);
     if(pat.length>steps) pat.length=steps;
+    // Same defensive length-sync as pattern, for the parallel per-step
+    // velocity array.
+    const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+    while(vel.length<steps) vel.push(100);
+    if(vel.length>steps) vel.length=steps;
     const groupStarts=new Set(seqGroupBoundaries(groupSlots));
 
     const block=document.createElement('div');
@@ -2510,7 +2597,16 @@ function renderSequencer(){
         btn.dataset.col=String(i);
         btn.dataset.row=row.id;
         if(pat[i]) btn.classList.add('on');
+        seqApplyCellVelStyle(btn, row, i);
         btn.addEventListener('pointerdown', (e)=>{
+          // Shift+drag sets this one cell's volume instead of toggling it --
+          // a completely separate gesture (pointer-captured on this button,
+          // see seqBeginCellVolDrag) so it never engages the paint-fill
+          // below, even if the drag wanders over other cells.
+          if(e.shiftKey){
+            seqBeginCellVolDrag(btn, row, i, e);
+            return;
+          }
           e.preventDefault(); // no text-selection/native-drag ghost while painting
           const active=!pat[i];
           pat[i]=active;
@@ -2605,6 +2701,7 @@ function seqAddRow(voiceId){
   const id=seqNewRowId();
   seq.rows.push({id, voiceId});
   seq.pattern[id]=new Array(SEQ_STEPS).fill(false);
+  seq.velocity[id]=new Array(SEQ_STEPS).fill(100);
   renderSequencer();
 }
 
@@ -2612,6 +2709,7 @@ function seqDeleteRow(rowId){
   if(seq.rows.length<=1){ showHint('At least one row is required.'); return; }
   seq.rows=seq.rows.filter(r=>r.id!==rowId);
   delete seq.pattern[rowId];
+  delete seq.velocity[rowId];
   delete seqSyncRuntime[rowId];
   delete seqRowHighlight[rowId];
   if(rowClipboard && rowClipboard.sourceRow===rowId) rowClipboard=null;
@@ -2980,8 +3078,14 @@ seqZoomIn.addEventListener('click', ()=>{
   seqApplyZoom();
 });
 seqClearBtn.addEventListener('click', ()=>{
-  seq.rows.forEach(row=> seq.pattern[row.id].fill(false));
-  document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+  seq.rows.forEach(row=>{
+    seq.pattern[row.id].fill(false);
+    if(seq.velocity[row.id]) seq.velocity[row.id].fill(100);
+  });
+  document.querySelectorAll('.step').forEach(el=>{
+    el.classList.remove('on');
+    el.style.setProperty('--cell-vel', '1.000');
+  });
 });
 
 // ---- screenshot export ----
@@ -3011,8 +3115,9 @@ function seqBuildScreenshotCanvas(){
     const voice=VOICES.find(v=>v.id===row.voiceId);
     const groupSlots=rowGroupSlots(row);
     const pat=seq.pattern[row.id]||[];
+    const vel=seq.velocity[row.id]||[];
     const groupStarts=new Set(seqGroupBoundaries(groupSlots));
-    return {name:voice?voice.name:row.voiceId, pat, groupStarts, lines:seqGroupLineChunks(groupSlots)};
+    return {name:voice?voice.name:row.voiceId, pat, vel, groupStarts, lines:seqGroupLineChunks(groupSlots)};
   });
 
   // A line's pixel width now depends on how many group breaks fall inside
@@ -3056,8 +3161,12 @@ function seqBuildScreenshotCanvas(){
       let x=pad+labelW;
       for(let i=line.stepStart;i<line.stepEnd;i++){
         if(i>line.stepStart) x+=cellGap+(r.groupStarts.has(i)?groupGap:0);
+        // Same brightness floor as the live grid's --cell-vel (25%-100%),
+        // via globalAlpha rather than a CSS var since this is a canvas.
+        ctx.globalAlpha=r.pat[i] ? seqCellVelFrac(r.vel[i]) : 1;
         ctx.fillStyle=r.pat[i] ? onColor : offColor;
         ctx.fillRect(x, lineY, cellSize, cellSize);
+        ctx.globalAlpha=1;
         ctx.strokeStyle=borderColor;
         ctx.lineWidth=1;
         ctx.strokeRect(x+0.5, lineY+0.5, cellSize-1, cellSize-1);
@@ -3830,7 +3939,8 @@ function collectProjectState(){
         muted:r.muted ? true : undefined,
         solo:r.solo ? true : undefined
       })),
-      pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()]))
+      pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()])),
+      velocity:Object.fromEntries(rowIds.map(id=>[id, (seq.velocity[id]||new Array(seq.pattern[id].length).fill(100)).slice()]))
     },
     textPatterns:{
       patterns:patternLib.patterns.map(p=>({id:p.id, label:p.label, pairs:p.pairs.map(pr=>({slots:pr.slots, repeat:pr.repeat}))})),
@@ -3939,11 +4049,18 @@ function applyProjectState(data){
   }) : seq.rows;
   SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
   seq.pattern={};
+  seq.velocity={};
   seq.rows.forEach(r=>{
     const n=rowSteps(r);
     const saved=s.pattern && s.pattern[r.id];
     seq.pattern[r.id]=Array.isArray(saved) ? saved.slice(0, n) : [];
     while(seq.pattern[r.id].length<n) seq.pattern[r.id].push(false);
+    // Older save files (from before per-step velocity existed) have no
+    // s.velocity at all -- every step just defaults to 100, same as a
+    // step that's never been shift-dragged in a newer file.
+    const savedVel=s.velocity && s.velocity[r.id];
+    seq.velocity[r.id]=Array.isArray(savedVel) ? savedVel.slice(0, n) : [];
+    while(seq.velocity[r.id].length<n) seq.velocity[r.id].push(100);
   });
   seqSyncRuntime={};
   seqRowHighlight={};
