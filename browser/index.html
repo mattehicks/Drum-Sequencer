@@ -9,6 +9,8 @@
   --subtext:#9a9691;
   --accent:#ff8a3d;
   --accent-2:#52d7c4;
+  --copy-pink:#ff4fa3;
+  --paste-green:#3ddc6a;
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans:'Barlow', system-ui, -apple-system, sans-serif;
 }
@@ -213,15 +215,6 @@ canvas{
 .step.seq-current{box-shadow:0 0 0 2px var(--accent-2);}
 .step.on.seq-current{box-shadow:0 0 0 2px var(--accent-2), 0 0 10px var(--accent);}
 
-.seq-measure-ctrl{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:20px;
-  margin-top:12px;
-  padding-top:10px;
-  border-top:1px solid var(--border);
-}
 .seq-ctrl-group{
   display:flex;
   align-items:center;
@@ -247,13 +240,57 @@ canvas{
 }
 .seq-beats-btn:hover{border-color:var(--accent);}
 .seq-beats-btn:disabled{opacity:0.35; cursor:default; border-color:var(--border); color:var(--subtext);}
-#seqBeatsVal, #seqSlotsVal{
+#seqBeatsVal, .seq-group-ctrl output{
   font-family:var(--mono);
   font-size:13px;
   font-weight:600;
   color:var(--text);
-  min-width:18px;
+  min-width:16px;
   text-align:center;
+}
+
+.seq-group-ctrls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.seq-group-ctrl{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:4px 6px;
+}
+.seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px;}
+.seq-copy-btn, .seq-paste-btn{
+  width:20px; height:20px;
+  padding:0;
+  font-size:10px;
+  line-height:1;
+  border-radius:5px;
+  cursor:pointer;
+  background:transparent;
+}
+.seq-copy-btn{
+  border:1px solid var(--copy-pink);
+  color:var(--copy-pink);
+}
+.seq-copy-btn:hover{background:var(--copy-pink); color:var(--bg);}
+.seq-copy-btn.active{background:var(--copy-pink); color:var(--bg);}
+.seq-paste-btn{
+  border:1px solid var(--paste-green);
+  color:var(--paste-green);
+}
+.seq-paste-btn:hover:not(:disabled){background:var(--paste-green); color:var(--bg);}
+.seq-paste-btn:disabled{opacity:0.3; cursor:default; border-color:var(--border); color:var(--subtext);}
+.seq-group-label{
+  font-size:10px;
+  font-family:var(--mono);
+  color:var(--subtext);
+  min-width:38px;
 }
 
 .rack{
@@ -433,22 +470,15 @@ canvas{
         <output id="seqTempoOut">112 BPM</output>
       </label>
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
-    </div>
-    <div class="seq-body" id="seqBody"></div>
-    <div class="seq-measure-ctrl">
       <div class="seq-ctrl-group">
         <span class="seq-beats-label">Beats / measure</span>
         <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
         <output id="seqBeatsVal" for="seqBody">4</output>
         <button type="button" class="seq-beats-btn" id="seqBeatsInc" aria-label="Increase beats per measure">+</button>
       </div>
-      <div class="seq-ctrl-group">
-        <span class="seq-beats-label">Slots / beat</span>
-        <button type="button" class="seq-beats-btn" id="seqSlotsDec" aria-label="Decrease slots per beat">&minus;</button>
-        <output id="seqSlotsVal" for="seqBody">4</output>
-        <button type="button" class="seq-beats-btn" id="seqSlotsInc" aria-label="Increase slots per beat">+</button>
-      </div>
     </div>
+    <div class="seq-body" id="seqBody"></div>
+    <div class="seq-group-ctrls" id="seqGroupCtrls"></div>
     <details class="theory">
       <summary>Theory</summary>
       <p id="seqTheory"></p>
@@ -973,7 +1003,7 @@ let SEQ_STEPS=16;
 const seq={
   bpm:112,
   beatsPerMeasure:4,
-  slotsPerBeat:4,
+  groupSlots:[4,4,4,4],
   playing:false,
   pattern:{
     kick:  [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
@@ -991,7 +1021,14 @@ let seqHighlightCol=-1;
 const SEQ_LOOKAHEAD_MS=25;
 const SEQ_SCHEDULE_AHEAD=0.12;
 
-function seqSecondsPerStep(){ return 60/seq.bpm/seq.slotsPerBeat; }
+const SLOT_UNIT_DIVISIONS=4; // one slot = a 16th note at the given BPM, fixed regardless of grouping
+function seqSecondsPerStep(){ return 60/seq.bpm/SLOT_UNIT_DIVISIONS; }
+
+function seqGroupBoundaries(groupSlots){
+  const bounds=[]; let acc=0;
+  groupSlots.forEach(n=>{ bounds.push(acc); acc+=n; });
+  return bounds;
+}
 
 function seqSetPlayheadColumn(col){
   if(seqHighlightCol>=0){
@@ -1047,26 +1084,83 @@ function seqStop(){
   seqPlayBtn.classList.remove('active');
 }
 
-function seqResize(newBeats, newSlots){
-  if(seq.playing) seqStop();
-  seq.beatsPerMeasure=newBeats;
-  seq.slotsPerBeat=newSlots;
-  const newStepCount=newBeats*newSlots;
+function seqRebuildPatterns(oldGroupSlots, newGroupSlots){
+  const oldBounds=seqGroupBoundaries(oldGroupSlots);
   SEQ_ROWS.forEach(id=>{
     const old=seq.pattern[id];
-    const next=new Array(newStepCount).fill(false);
-    for(let i=0;i<Math.min(old.length, newStepCount);i++) next[i]=old[i];
+    const next=[];
+    newGroupSlots.forEach((newCount, g)=>{
+      const oldCount=oldGroupSlots[g]||0;
+      const oldStart=oldBounds[g]||0;
+      for(let i=0;i<newCount;i++){
+        next.push(i<oldCount ? old[oldStart+i] : false);
+      }
+    });
     seq.pattern[id]=next;
   });
-  SEQ_STEPS=newStepCount;
+  SEQ_STEPS=newGroupSlots.reduce((a,b)=>a+b, 0);
+}
+
+function seqSetGroupCount(newCount){
+  if(seq.playing) seqStop();
+  const oldGroupSlots=seq.groupSlots.slice();
+  if(newCount>seq.groupSlots.length){
+    while(seq.groupSlots.length<newCount) seq.groupSlots.push(4);
+  }else if(newCount<seq.groupSlots.length){
+    seq.groupSlots.length=newCount;
+  }
+  seq.beatsPerMeasure=newCount;
+  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
   seqCurrentStep=0;
   renderSequencer();
   updateSeqMeasureUI();
 }
 
+function seqSetGroupSlots(groupIndex, newSlotCount){
+  if(seq.playing) seqStop();
+  const oldGroupSlots=seq.groupSlots.slice();
+  seq.groupSlots[groupIndex]=newSlotCount;
+  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
+  seqCurrentStep=0;
+  renderSequencer();
+}
+
+// Copy/paste a measure (beat group): copy grabs that group's slot count and
+// every row's steps within it; paste overwrites a target group, resizing it
+// to match the copied length so the pasted pattern transfers exactly.
+let seqClipboard=null; // {slotCount, pattern:{voiceId:[bool,...]}}
+
+function seqCopyGroup(groupIndex){
+  const bounds=seqGroupBoundaries(seq.groupSlots);
+  const start=bounds[groupIndex];
+  const count=seq.groupSlots[groupIndex];
+  const pattern={};
+  SEQ_ROWS.forEach(id=>{ pattern[id]=seq.pattern[id].slice(start, start+count); });
+  seqClipboard={slotCount:count, pattern, sourceGroup:groupIndex};
+  renderGroupControls();
+}
+
+function seqPasteGroup(groupIndex){
+  if(!seqClipboard) return;
+  if(seq.playing) seqStop();
+  const oldGroupSlots=seq.groupSlots.slice();
+  seq.groupSlots[groupIndex]=seqClipboard.slotCount;
+  seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
+  const bounds=seqGroupBoundaries(seq.groupSlots);
+  const start=bounds[groupIndex];
+  SEQ_ROWS.forEach(id=>{
+    for(let i=0;i<seqClipboard.slotCount;i++){
+      seq.pattern[id][start+i]=!!seqClipboard.pattern[id][i];
+    }
+  });
+  seqCurrentStep=0;
+  renderSequencer();
+}
+
 function renderSequencer(){
   const body=document.getElementById('seqBody');
   body.innerHTML='';
+  const groupStarts=new Set(seqGroupBoundaries(seq.groupSlots));
   SEQ_ROWS.forEach(voiceId=>{
     const voice=VOICES.find(v=>v.id===voiceId);
     const row=document.createElement('div');
@@ -1088,7 +1182,7 @@ function renderSequencer(){
     for(let i=0;i<SEQ_STEPS;i++){
       const btn=document.createElement('button');
       btn.type='button';
-      btn.className='step'+(i%seq.slotsPerBeat===0?' group-start':'');
+      btn.className='step'+(groupStarts.has(i)?' group-start':'');
       btn.dataset.col=String(i);
       btn.dataset.voice=voiceId;
       if(seq.pattern[voiceId][i]) btn.classList.add('on');
@@ -1101,6 +1195,57 @@ function renderSequencer(){
     }
     row.appendChild(cells);
     body.appendChild(row);
+  });
+  renderGroupControls();
+}
+
+function renderGroupControls(){
+  const wrap=document.getElementById('seqGroupCtrls');
+  wrap.innerHTML='';
+  seq.groupSlots.forEach((count, g)=>{
+    const box=document.createElement('div');
+    box.className='seq-group-ctrl';
+
+    const label=document.createElement('span');
+    label.className='seq-group-label';
+    label.textContent='Beat '+(g+1);
+
+    const dec=document.createElement('button');
+    dec.type='button'; dec.className='seq-beats-btn';
+    dec.textContent='−';
+    dec.setAttribute('aria-label', 'Decrease slots for beat '+(g+1));
+    dec.disabled=count<=SEQ_SLOTS_MIN;
+    dec.addEventListener('click', ()=> seqSetGroupSlots(g, count-1));
+
+    const out=document.createElement('output');
+    out.textContent=String(count);
+
+    const inc=document.createElement('button');
+    inc.type='button'; inc.className='seq-beats-btn';
+    inc.textContent='+';
+    inc.setAttribute('aria-label', 'Increase slots for beat '+(g+1));
+    inc.disabled=count>=SEQ_SLOTS_MAX;
+    inc.addEventListener('click', ()=> seqSetGroupSlots(g, count+1));
+
+    const copyBtn=document.createElement('button');
+    copyBtn.type='button'; copyBtn.className='seq-copy-btn';
+    copyBtn.textContent='C';
+    copyBtn.title='Copy beat '+(g+1);
+    copyBtn.setAttribute('aria-label', 'Copy beat '+(g+1));
+    if(seqClipboard && seqClipboard.sourceGroup===g) copyBtn.classList.add('active');
+    copyBtn.addEventListener('click', ()=> seqCopyGroup(g));
+
+    const pasteBtn=document.createElement('button');
+    pasteBtn.type='button'; pasteBtn.className='seq-paste-btn';
+    pasteBtn.textContent='P';
+    pasteBtn.title='Paste into beat '+(g+1);
+    pasteBtn.setAttribute('aria-label', 'Paste into beat '+(g+1));
+    pasteBtn.disabled=!seqClipboard;
+    pasteBtn.addEventListener('click', ()=> seqPasteGroup(g));
+
+    box.appendChild(label); box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
+    box.appendChild(copyBtn); box.appendChild(pasteBtn);
+    wrap.appendChild(box);
   });
 }
 
@@ -1118,9 +1263,6 @@ seqTempoInput.addEventListener('input', ()=>{
 const seqBeatsDec=document.getElementById('seqBeatsDec');
 const seqBeatsInc=document.getElementById('seqBeatsInc');
 const seqBeatsVal=document.getElementById('seqBeatsVal');
-const seqSlotsDec=document.getElementById('seqSlotsDec');
-const seqSlotsInc=document.getElementById('seqSlotsInc');
-const seqSlotsVal=document.getElementById('seqSlotsVal');
 const SEQ_BEATS_MIN=2, SEQ_BEATS_MAX=12;
 const SEQ_SLOTS_MIN=1, SEQ_SLOTS_MAX=8;
 
@@ -1128,22 +1270,13 @@ function updateSeqMeasureUI(){
   seqBeatsVal.textContent=String(seq.beatsPerMeasure);
   seqBeatsDec.disabled=seq.beatsPerMeasure<=SEQ_BEATS_MIN;
   seqBeatsInc.disabled=seq.beatsPerMeasure>=SEQ_BEATS_MAX;
-  seqSlotsVal.textContent=String(seq.slotsPerBeat);
-  seqSlotsDec.disabled=seq.slotsPerBeat<=SEQ_SLOTS_MIN;
-  seqSlotsInc.disabled=seq.slotsPerBeat>=SEQ_SLOTS_MAX;
 }
 
 seqBeatsDec.addEventListener('click', ()=>{
-  if(seq.beatsPerMeasure>SEQ_BEATS_MIN) seqResize(seq.beatsPerMeasure-1, seq.slotsPerBeat);
+  if(seq.beatsPerMeasure>SEQ_BEATS_MIN) seqSetGroupCount(seq.beatsPerMeasure-1);
 });
 seqBeatsInc.addEventListener('click', ()=>{
-  if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqResize(seq.beatsPerMeasure+1, seq.slotsPerBeat);
-});
-seqSlotsDec.addEventListener('click', ()=>{
-  if(seq.slotsPerBeat>SEQ_SLOTS_MIN) seqResize(seq.beatsPerMeasure, seq.slotsPerBeat-1);
-});
-seqSlotsInc.addEventListener('click', ()=>{
-  if(seq.slotsPerBeat<SEQ_SLOTS_MAX) seqResize(seq.beatsPerMeasure, seq.slotsPerBeat+1);
+  if(seq.beatsPerMeasure<SEQ_BEATS_MAX) seqSetGroupCount(seq.beatsPerMeasure+1);
 });
 seqClearBtn.addEventListener('click', ()=>{
   SEQ_ROWS.forEach(id=> seq.pattern[id].fill(false));
@@ -1151,7 +1284,7 @@ seqClearBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('seqTheory').textContent=
-  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. Total step count = Beats/measure x Slots/beat -- BPM always means quarter notes per minute, and a step lasts (60/BPM)/Slots seconds, so 4 beats x 4 slots is the original 16-step 16th-note grid, 4 x 3 gives 12 steps of triplet feel, 7 x 2 gives a 7/8-style 14-step grid, and so on. Changing either control stops playback, resizes every row (keeping whatever steps still fit), and resets to step 1.";
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. Changing any of it stops playback, rebuilds every row (keeping whatever hits still fit in their group), and resets to step 1. Each group also has a pink Copy (C) and green Paste (P) button: Copy grabs that group's slot count and every row's steps within it; Paste overwrites the target group and resizes it to match the copied length, so the pattern transfers exactly.";
 
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
