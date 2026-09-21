@@ -94,6 +94,7 @@ body{
 }
 .engine-btn:hover{border-color:var(--accent);}
 .engine-btn:focus-visible{outline:2px solid var(--accent-2);}
+.engine-btn.active{background:var(--accent-2); color:var(--bg); border-color:var(--accent-2);}
 #engineStatus{
   font-family:var(--mono);
   font-size:12px;
@@ -607,7 +608,7 @@ canvas{
 
   <div class="toolbar" id="engineBar">
     <div class="master">
-      <button id="engineBtn" class="engine-btn" type="button">Start Engine</button>
+      <button id="engineBtn" class="engine-btn" type="button">&#9654; Start Engine</button>
       <span id="engineStatus"></span>
       <label class="master-vol">Master
         <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8">
@@ -1063,70 +1064,144 @@ const VOICES=[
 
 /* ---------- UI ---------- */
 
+// Builds one voice card. Assumes state.voices[voice.id] is already seeded
+// (by renderVoices for a stock voice, or by duplicateVoice for a clone) so
+// sliders always reflect the actual current values, not the param
+// definition's defaults.
+function buildVoiceCard(voice){
+  const card=document.createElement('article');
+  card.className='voice';
+  card.id='voiceCard-'+voice.id;
+
+  const head=document.createElement('div');
+  head.className='voice-head';
+  head.title='Right-click to duplicate this instrument';
+  const keyEl=document.createElement('span');
+  keyEl.className='voice-key'; keyEl.textContent=voice.key||'•';
+  const h3=document.createElement('h3'); h3.textContent=voice.name;
+  head.appendChild(keyEl); head.appendChild(h3);
+  head.addEventListener('contextmenu', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const items=[{label:'Duplicate', onSelect:()=> duplicateVoice(voice.id)}];
+    if(voice.isClone){
+      items.push({label:'Delete Instrument', danger:true, onSelect:()=> deleteVoiceClone(voice.id)});
+    }
+    openContextMenu(e.clientX, e.clientY, items);
+  });
+  card.appendChild(head);
+
+  const pad=document.createElement('button');
+  pad.type='button'; pad.className='pad'; pad.textContent='TRIGGER';
+  pad.addEventListener('click', ()=>firePad(voice, pad));
+  card.appendChild(pad);
+  pads[voice.id]=pad;
+
+  const paramsWrap=document.createElement('div');
+  paramsWrap.className='voice-params';
+  voice.params.forEach(p=>{
+    const row=document.createElement('div');
+    row.className='param';
+    const uid=voice.id+'-'+p.id;
+
+    const label=document.createElement('label');
+    label.setAttribute('for', uid); label.textContent=p.label;
+
+    const input=document.createElement('input');
+    input.type='range'; input.id=uid;
+    input.min=p.min; input.max=p.max; input.step=p.step;
+    input.value=state.voices[voice.id][p.id];
+
+    const out=document.createElement('output');
+    out.setAttribute('for', uid); out.textContent=formatVal(p, state.voices[voice.id][p.id]);
+
+    input.addEventListener('input', ()=>{
+      const v=parseFloat(input.value);
+      state.voices[voice.id][p.id]=v;
+      out.textContent=formatVal(p, v);
+      if(voice.id==='ks' && p.id==='level' && ksGain){
+        ksGain.gain.value=v;
+      }
+    });
+
+    row.appendChild(label); row.appendChild(input); row.appendChild(out);
+    paramsWrap.appendChild(row);
+  });
+  card.appendChild(paramsWrap);
+
+  const details=document.createElement('details');
+  details.className='theory';
+  const summary=document.createElement('summary'); summary.textContent='Theory';
+  const theoryP=document.createElement('p'); theoryP.textContent=voice.theory;
+  details.appendChild(summary); details.appendChild(theoryP);
+  card.appendChild(details);
+
+  return card;
+}
+
 function renderVoices(){
   const rack=document.getElementById('rack');
   VOICES.forEach(voice=>{
     const initial={};
     voice.params.forEach(p=>{ initial[p.id]=p.value; });
     state.voices[voice.id]=initial;
-
-    const card=document.createElement('article');
-    card.className='voice';
-
-    const head=document.createElement('div');
-    head.className='voice-head';
-    const keyEl=document.createElement('span');
-    keyEl.className='voice-key'; keyEl.textContent=voice.key;
-    const h3=document.createElement('h3'); h3.textContent=voice.name;
-    head.appendChild(keyEl); head.appendChild(h3);
-    card.appendChild(head);
-
-    const pad=document.createElement('button');
-    pad.type='button'; pad.className='pad'; pad.textContent='TRIGGER';
-    pad.addEventListener('click', ()=>firePad(voice, pad));
-    card.appendChild(pad);
-    pads[voice.id]=pad;
-
-    const paramsWrap=document.createElement('div');
-    paramsWrap.className='voice-params';
-    voice.params.forEach(p=>{
-      const row=document.createElement('div');
-      row.className='param';
-      const uid=voice.id+'-'+p.id;
-
-      const label=document.createElement('label');
-      label.setAttribute('for', uid); label.textContent=p.label;
-
-      const input=document.createElement('input');
-      input.type='range'; input.id=uid;
-      input.min=p.min; input.max=p.max; input.step=p.step; input.value=p.value;
-
-      const out=document.createElement('output');
-      out.setAttribute('for', uid); out.textContent=formatVal(p, p.value);
-
-      input.addEventListener('input', ()=>{
-        const v=parseFloat(input.value);
-        state.voices[voice.id][p.id]=v;
-        out.textContent=formatVal(p, v);
-        if(voice.id==='ks' && p.id==='level' && ksGain){
-          ksGain.gain.value=v;
-        }
-      });
-
-      row.appendChild(label); row.appendChild(input); row.appendChild(out);
-      paramsWrap.appendChild(row);
-    });
-    card.appendChild(paramsWrap);
-
-    const details=document.createElement('details');
-    details.className='theory';
-    const summary=document.createElement('summary'); summary.textContent='Theory';
-    const theoryP=document.createElement('p'); theoryP.textContent=voice.theory;
-    details.appendChild(summary); details.appendChild(theoryP);
-    card.appendChild(details);
-
-    rack.appendChild(card);
+    rack.appendChild(buildVoiceCard(voice));
   });
+}
+
+// Right-click a voice card's header (the badge/name row) to duplicate it.
+// The clone gets a free numeric suffix on both id and name (Kick -> Kick 2
+// -> Kick 3, continuing the sequence whichever copy you duplicate from),
+// reuses the same synthesis function, and starts from the source's current
+// (possibly already-tweaked) slider values rather than its defaults, so
+// "duplicate and edit" doesn't first require re-dialing-in the source
+// sound. Clones have no keyboard shortcut (avoids colliding with 1-9) and,
+// unlike the 9 stock voices, can be deleted again from the same menu.
+function duplicateVoice(sourceId){
+  const src=VOICES.find(v=>v.id===sourceId);
+  if(!src) return;
+  const baseId=src.id.replace(/\d+$/,'');
+  const baseName=src.name.replace(/\s+\d+$/,'');
+  let n=2;
+  while(VOICES.some(v=>v.id===baseId+n)) n++;
+  const clone={
+    id:baseId+n,
+    key:'',
+    name:baseName+' '+n,
+    trigger:src.trigger,
+    theory:src.theory,
+    params:src.params.map(p=>({...p})),
+    isClone:true,
+    clonedFrom:src.id
+  };
+  VOICES.push(clone);
+  state.voices[clone.id]={...state.voices[src.id]};
+  const card=buildVoiceCard(clone);
+  document.getElementById('rack').appendChild(card);
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+  showHint('Duplicated as '+clone.name+'.');
+}
+
+function deleteVoiceClone(voiceId){
+  const idx=VOICES.findIndex(v=>v.id===voiceId);
+  if(idx<0) return;
+  const voice=VOICES[idx];
+  if(!voice.isClone) return; // the 9 stock voices are never deletable
+  VOICES.splice(idx,1);
+  delete state.voices[voiceId];
+  delete pads[voiceId];
+  // Any sequencer row still pointing at the deleted clone falls back to
+  // whatever it was duplicated from (or the first stock voice) instead of
+  // being left with a dangling voiceId.
+  const fallbackId=VOICES.some(v=>v.id===voice.clonedFrom) ? voice.clonedFrom : VOICES[0].id;
+  let reassigned=false;
+  seq.rows.forEach(row=>{
+    if(row.voiceId===voiceId){ row.voiceId=fallbackId; reassigned=true; }
+  });
+  const card=document.getElementById('voiceCard-'+voiceId);
+  if(card) card.remove();
+  if(reassigned) renderSequencer();
+  showHint('Deleted '+voice.name+'.');
 }
 
 let hintTimer=null;
@@ -1138,8 +1213,10 @@ function showHint(msg){
 }
 
 function firePad(voice, padEl){
-  if(!ctx){ showHint('Start the engine first.'); return; }
-  if(ctx.state==='suspended') ctx.resume();
+  // Suspended (not just uncreated) also means "start the engine first" now
+  // that Start/Stop Engine is an explicit toggle -- a trigger pad shouldn't
+  // silently resume audio the user deliberately stopped.
+  if(!ctx || ctx.state!=='running'){ showHint('Start the engine first.'); return; }
   const p=state.voices[voice.id];
   const ok=voice.trigger(p);
   if(padEl){
@@ -1234,7 +1311,7 @@ function seqScheduler(){
 }
 
 function seqStart(){
-  if(!ctx){ showHint('Start the engine first.'); return; }
+  if(!ctx || ctx.state!=='running'){ showHint('Start the engine first.'); return; }
   if(seq.playing) return;
   seq.playing=true;
   seqCurrentStep=0;
@@ -1269,8 +1346,16 @@ function seqRebuildPatterns(oldGroupSlots, newGroupSlots){
   SEQ_STEPS=newGroupSlots.reduce((a,b)=>a+b, 0);
 }
 
+// Restructuring the grid (beats, slots, copy/paste, rows) never stops
+// playback -- it keeps running through the change. seqCurrentStep is kept
+// in range for the new SEQ_STEPS instead of being reset, so a currently
+// playing pattern continues rather than jumping back to step 1; when
+// stopped it's fine to just park it at 0 for the next Play.
+function seqClampCurrentStep(){
+  seqCurrentStep = seq.playing ? (seqCurrentStep % SEQ_STEPS) : 0;
+}
+
 function seqSetGroupCount(newCount){
-  if(seq.playing) seqStop();
   const oldGroupSlots=seq.groupSlots.slice();
   if(newCount>seq.groupSlots.length){
     while(seq.groupSlots.length<newCount) seq.groupSlots.push(4);
@@ -1279,17 +1364,16 @@ function seqSetGroupCount(newCount){
   }
   seq.beatsPerMeasure=newCount;
   seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
-  seqCurrentStep=0;
+  seqClampCurrentStep();
   renderSequencer();
   updateSeqMeasureUI();
 }
 
 function seqSetGroupSlots(groupIndex, newSlotCount){
-  if(seq.playing) seqStop();
   const oldGroupSlots=seq.groupSlots.slice();
   seq.groupSlots[groupIndex]=newSlotCount;
   seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
-  seqCurrentStep=0;
+  seqClampCurrentStep();
   renderSequencer();
 }
 
@@ -1311,7 +1395,6 @@ function seqCopyGroup(groupIndex){
 
 function seqPasteGroup(groupIndex){
   if(!seqClipboard) return;
-  if(seq.playing) seqStop();
   const oldGroupSlots=seq.groupSlots.slice();
   seq.groupSlots[groupIndex]=seqClipboard.slotCount;
   seqRebuildPatterns(oldGroupSlots, seq.groupSlots);
@@ -1325,7 +1408,7 @@ function seqPasteGroup(groupIndex){
       seq.pattern[row.id][start+i]=!!(clip && clip[i]);
     }
   });
-  seqCurrentStep=0;
+  seqClampCurrentStep();
   renderSequencer();
 }
 
@@ -1358,7 +1441,9 @@ function renderSequencer(){
     rowEl.addEventListener('contextmenu', (e)=>{
       e.preventDefault();
       e.stopPropagation();
-      openRowContextMenu(e.clientX, e.clientY, row.id);
+      openContextMenu(e.clientX, e.clientY, [
+        {label:'Delete Row', danger:true, disabled:seq.rows.length<=1, onSelect:()=> seqDeleteRow(row.id)}
+      ]);
     });
 
     const cells=document.createElement('div');
@@ -1392,7 +1477,6 @@ function seqSetRowVoice(rowId, voiceId){
 }
 
 function seqAddRow(voiceId){
-  if(seq.playing) seqStop();
   const id=seqNewRowId();
   seq.rows.push({id, voiceId});
   seq.pattern[id]=new Array(SEQ_STEPS).fill(false);
@@ -1401,7 +1485,6 @@ function seqAddRow(voiceId){
 
 function seqDeleteRow(rowId){
   if(seq.rows.length<=1){ showHint('At least one row is required.'); return; }
-  if(seq.playing) seqStop();
   seq.rows=seq.rows.filter(r=>r.id!==rowId);
   delete seq.pattern[rowId];
   renderSequencer();
@@ -1570,55 +1653,58 @@ seqAddRowBtn.addEventListener('click', (e)=>{
   openVoicePicker(seqAddRowBtn, null, (voiceId)=> seqAddRow(voiceId));
 });
 
-/* ---------- row context menu (right-click) ---------- */
+/* ---------- generic context menu (right-click) ---------- */
+// Shared by sequencer rows (Delete Row) and voice cards (Duplicate / Delete
+// Instrument). items: [{label, danger?, disabled?, onSelect}]
 
-const rowContextMenu=document.createElement('div');
-rowContextMenu.className='context-menu';
-rowContextMenu.id='rowContextMenu';
-rowContextMenu.hidden=true;
-document.body.appendChild(rowContextMenu);
+const contextMenuEl=document.createElement('div');
+contextMenuEl.className='context-menu';
+contextMenuEl.id='contextMenu';
+contextMenuEl.hidden=true;
+document.body.appendChild(contextMenuEl);
 
-function openRowContextMenu(clientX, clientY, rowId){
-  rowContextMenu.innerHTML='';
-
-  const delItem=document.createElement('button');
-  delItem.type='button';
-  delItem.className='context-menu-item danger';
-  delItem.textContent='Delete Row';
-  delItem.disabled=seq.rows.length<=1;
-  delItem.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    seqDeleteRow(rowId);
-    closeRowContextMenu();
+function openContextMenu(clientX, clientY, items){
+  contextMenuEl.innerHTML='';
+  items.forEach(item=>{
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='context-menu-item'+(item.danger ? ' danger' : '');
+    btn.textContent=item.label;
+    btn.disabled=!!item.disabled;
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      closeContextMenu();
+      item.onSelect();
+    });
+    contextMenuEl.appendChild(btn);
   });
-  rowContextMenu.appendChild(delItem);
 
-  rowContextMenu.hidden=false;
-  const menuRect=rowContextMenu.getBoundingClientRect();
+  contextMenuEl.hidden=false;
+  const menuRect=contextMenuEl.getBoundingClientRect();
   let left=Math.min(clientX, window.innerWidth-menuRect.width-8);
   let top=Math.min(clientY, window.innerHeight-menuRect.height-8);
   left=Math.max(8, left);
   top=Math.max(8, top);
-  rowContextMenu.style.left=left+'px';
-  rowContextMenu.style.top=top+'px';
+  contextMenuEl.style.left=left+'px';
+  contextMenuEl.style.top=top+'px';
 }
 
-function closeRowContextMenu(){
-  rowContextMenu.hidden=true;
+function closeContextMenu(){
+  contextMenuEl.hidden=true;
 }
 
 document.addEventListener('click', (e)=>{
-  if(!rowContextMenu.hidden && !rowContextMenu.contains(e.target)) closeRowContextMenu();
+  if(!contextMenuEl.hidden && !contextMenuEl.contains(e.target)) closeContextMenu();
 });
 document.addEventListener('contextmenu', (e)=>{
-  if(!rowContextMenu.hidden && !rowContextMenu.contains(e.target)) closeRowContextMenu();
+  if(!contextMenuEl.hidden && !contextMenuEl.contains(e.target)) closeContextMenu();
 });
 document.addEventListener('keydown', (e)=>{
-  if(e.key==='Escape') closeRowContextMenu();
+  if(e.key==='Escape') closeContextMenu();
 });
 
 document.getElementById('seqTheory').textContent=
-  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. Changing any of it stops playback, rebuilds every row (keeping whatever hits still fit in their group), and resets to step 1. Each group also has a pink Copy (C) and green Paste (P) button: Copy grabs that group's slot count and every row's steps within it; Paste overwrites the target group and resizes it to match the copied length, so the pattern transfers exactly.";
+  "Runs on a lookahead scheduler, not a per-step setTimeout/setInterval: every 25ms a JS timer checks the AudioContext clock and schedules any steps due in the next 120ms using the same sample-accurate setValueAtTime/exponentialRampToValueAtTime calls the voices already use for manual triggers, instead of firing on the tick of an imprecise browser timer. Browser timers alone drift and jitter by tens of milliseconds under load; scheduling ahead against the audio clock -- while a separate timer only handles the visual playhead -- is the standard technique web-based sequencers use for tight, consistent timing. A slot is always a 16th note at the current BPM (60/BPM/4 seconds), fixed regardless of grouping. Beats/measure sets how many groups exist; each group ('Beat N', under the grid) has its own independent slot count (1-8), so groups can be different lengths in the same measure -- e.g. 3+3+2 slots is a 7/8-style additive bar. Total steps = the sum of every group's slot count. None of this stops playback -- beats, slots, copy/paste, and adding or deleting rows all rebuild the pattern live (keeping whatever hits still fit) while the transport keeps running. Each group also has a pink Copy (C) and green Paste (P) button: Copy grabs that group's slot count and every row's steps within it; Paste overwrites the target group and resizes it to match the copied length, so the pattern transfers exactly.";
 
 /* ---------- AudioWorklet (Karplus-Strong) ---------- */
 
@@ -1794,9 +1880,20 @@ engineBtn.addEventListener('click', async ()=>{
     await setupKSWorklet();
     startVisualLoop();
   }
-  if(ctx.state==='suspended') await ctx.resume();
-  engineBtn.textContent='Engine Running';
-  engineStatus.textContent=ctx.sampleRate+' Hz';
+  if(ctx.state==='running'){
+    // Stopping the engine mid-playback would leave the transport running
+    // against a suspended clock, so bring the sequencer to a clean halt too.
+    if(seq.playing) seqStop();
+    await ctx.suspend();
+    engineBtn.textContent='▶ Start Engine';
+    engineBtn.classList.remove('active');
+    engineStatus.textContent='suspended';
+  }else{
+    await ctx.resume();
+    engineBtn.textContent='■ Stop Engine';
+    engineBtn.classList.add('active');
+    engineStatus.textContent=ctx.sampleRate+' Hz';
+  }
 });
 
 masterVolInput.addEventListener('input', ()=>{
