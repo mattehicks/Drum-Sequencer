@@ -508,6 +508,15 @@ canvas{
   height:26px;
   margin-top:10px;
 }
+#sequencer.seq-hide-bars .seq-group-ctrls{display:none;}
+.seq-bars-toggle.active{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--accent-2-rgb),0.4);
+}
 .seq-group-ctrl{
   position:absolute;
   top:0;
@@ -1040,6 +1049,7 @@ canvas{
         <output id="seqZoomVal" for="seqBody">100%</output>
         <button type="button" class="seq-beats-btn" id="seqZoomIn" aria-label="Zoom in the sequencer grid">+</button>
       </div>
+      <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Hide the per-beat slot-count/copy/paste strips (the shared one and every row's own) to save vertical space">Hide Bars</button>
     </div>
     <div class="seq-body" id="seqBody">
       <div id="seqRows"></div>
@@ -2291,6 +2301,11 @@ function renderSequencer(){
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) renderRowControls(row);
   });
+  // Resize any SYNC row's cells to their aligned widths BEFORE measuring
+  // where the group-control boxes land -- those boxes are positioned by
+  // reading the grid's actual rendered pixels, so they'd be measuring stale
+  // geometry if this ran after them.
+  applySyncRowCellWidths();
   positionGroupControls();
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) positionRowControls(row);
@@ -2461,6 +2476,44 @@ function positionRowControls(row){
   });
 }
 
+// An unlinked row in SYNC mode already gets squeezed/stretched in TIME to
+// fill exactly one shared bar (see the sync lane in seqScheduler) -- this
+// makes the grid match that visually too: each of the row's own beat-groups
+// is drawn at the SAME pixel width as the corresponding shared beat-group,
+// packed with however many of its own (narrower or wider) cells that group
+// currently holds, so a 5-in-4 row visibly shares the same four bar columns
+// as everything else instead of just running wider or narrower overall.
+// Pure arithmetic against the current zoom level, no DOM measurement needed
+// (unlike the position*Controls functions above), so it's safe to call any
+// time the grid, a row's groupSlots, or the zoom level changes. Only kicks
+// in when the row's own group count still matches the shared structure's --
+// the normal case, since nothing in the UI lets an unlinked row's group
+// count drift away from what it had when it unlinked.
+function applySyncRowCellWidths(){
+  const cellPx=Math.round(SEQ_BASE_CELL*seqZoom);
+  const gapPx=Math.max(2, Math.round(SEQ_BASE_GAP*seqZoom));
+  seq.rows.forEach(row=>{
+    const firstStep=document.querySelector('.step[data-row="'+row.id+'"]');
+    const cellsEl=firstStep ? firstStep.closest('.seq-cells') : null;
+    if(!cellsEl) return;
+    const aligned=rowIsUnlinked(row) && rowMode(row)==='sync' && row.groupSlots.length===seq.groupSlots.length;
+    if(!aligned){
+      cellsEl.style.gridTemplateColumns='';
+      Array.from(cellsEl.children).forEach(el=>{ el.style.width=''; });
+      return;
+    }
+    const widths=[];
+    seq.groupSlots.forEach((globalCount, g)=>{
+      const rowCount=row.groupSlots[g];
+      const targetPx=globalCount*cellPx+(globalCount-1)*gapPx;
+      const perCell=Math.max(6, (targetPx-(rowCount-1)*gapPx)/rowCount);
+      for(let i=0;i<rowCount;i++) widths.push(perCell);
+    });
+    cellsEl.style.gridTemplateColumns=widths.map(w=> w.toFixed(2)+'px').join(' ');
+    Array.from(cellsEl.children).forEach((el,i)=>{ el.style.width=(widths[i]!=null?widths[i]:cellPx)+'px'; });
+  });
+}
+
 const seqPlayBtn=document.getElementById('seqPlayBtn');
 const seqTempoInput=document.getElementById('seqTempo');
 const seqTempoOut=document.getElementById('seqTempoOut');
@@ -2513,9 +2566,12 @@ function seqApplyZoom(){
   seqZoomVal.textContent=Math.round(seqZoom*100)+'%';
   seqZoomOut.disabled=seqZoom<=SEQ_ZOOM_MIN+1e-9;
   seqZoomIn.disabled=seqZoom>=SEQ_ZOOM_MAX-1e-9;
-  // The grid just resized -- every group-control box (global strip + each
-  // unlinked row's own inline strip) needs repositioning against the new
-  // pixel geometry, exactly as after any other grid change.
+  // The grid just resized -- SYNC rows' aligned cell widths first (they
+  // scale with the same zoom-derived cell/gap sizes), then every
+  // group-control box (global strip + each unlinked row's own inline strip)
+  // needs repositioning against the new pixel geometry, exactly as after
+  // any other grid change.
+  applySyncRowCellWidths();
   positionGroupControls();
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) positionRowControls(row);
@@ -2533,6 +2589,25 @@ seqZoomIn.addEventListener('click', ()=>{
 seqClearBtn.addEventListener('click', ()=>{
   seq.rows.forEach(row=> seq.pattern[row.id].fill(false));
   document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+});
+
+// Hides every per-beat adjustment strip at once -- the shared global one and
+// each unlinked row's own inline copy -- so a project with several
+// independent rows doesn't force a slot-count/copy/paste strip under every
+// single one when you just want to look at (or play) the grid. Purely a
+// view preference, like zoom: it doesn't touch seq state and isn't saved
+// with the project.
+const seqBarsToggleBtn=document.getElementById('seqBarsToggleBtn');
+let seqBarsHidden=false;
+function seqApplyBarsVisibility(){
+  sequencerEl.classList.toggle('seq-hide-bars', seqBarsHidden);
+  seqBarsToggleBtn.classList.toggle('active', seqBarsHidden);
+  seqBarsToggleBtn.setAttribute('aria-pressed', String(seqBarsHidden));
+  seqBarsToggleBtn.textContent=seqBarsHidden ? 'Show Bars' : 'Hide Bars';
+}
+seqBarsToggleBtn.addEventListener('click', ()=>{
+  seqBarsHidden=!seqBarsHidden;
+  seqApplyBarsVisibility();
 });
 
 /* ---------- floating instrument picker ---------- */
@@ -3428,6 +3503,7 @@ renderVoices();
 renderSequencer();
 updateSeqMeasureUI();
 seqApplyZoom();
+seqApplyBarsVisibility();
 renderPatternsSection();
 
 })();
