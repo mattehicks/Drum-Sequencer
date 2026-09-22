@@ -410,6 +410,13 @@ canvas{
   flex-direction:column;
   gap:6px;
   min-width:0;
+  position:relative; /* anchors the absolutely-positioned .seq-phrase-line dividers */
+}
+.seq-phrase-line{
+  position:absolute;
+  width:1px;
+  background:rgba(255,255,255,0.16);
+  pointer-events:none;
 }
 .seq-cells{
   flex:none;
@@ -2781,6 +2788,7 @@ function renderSequencer(){
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) positionRowControls(row);
   });
+  applyPhraseDividers();
   updatePatternApplyTargetOptions();
 }
 
@@ -3055,6 +3063,48 @@ function applySyncRowCellWidths(){
       Array.from(cellsEl.children).forEach((el,i)=>{ el.style.width=(lineWidths[i]!=null?lineWidths[i]:cellPx)+'px'; });
       offset+=n;
     });
+  });
+}
+
+// A faint marker every SEQ_PHRASE_EVERY beat-groups, per row -- purely a
+// reading aid for long or many-beat measures (a 12-beat shared structure, or
+// a row built with Text Patterns) where the ordinary per-beat gap alone
+// doesn't read at a glance as "4 beats in, here's the next phrase." Each
+// row is measured against its OWN groupSlots (rowGroupSlots), not the
+// shared one, since an unlinked row can have a completely different beat
+// count -- that's why this runs per row instead of once for the whole grid.
+// Must run after applySyncRowCellWidths (cell widths/positions need to be
+// final first) and reads real layout via getBoundingClientRect, same as
+// positionGroupControls/positionRowControls right below it.
+const SEQ_PHRASE_EVERY=4;
+function applyPhraseDividers(){
+  const cs=getComputedStyle(document.getElementById('sequencer'));
+  const groupGap=parseFloat(cs.getPropertyValue('--seq-group-gap'))||8;
+  seq.rows.forEach(row=>{
+    const firstStep=document.querySelector('.step[data-row="'+row.id+'"]');
+    const blockEl=firstStep ? firstStep.closest('.seq-row-block') : null;
+    const wrapEl=firstStep ? firstStep.closest('.seq-cells-wrap') : null;
+    if(!blockEl || !wrapEl) return;
+    wrapEl.querySelectorAll('.seq-phrase-line').forEach(el=> el.remove());
+    const groupSlots=rowGroupSlots(row);
+    if(groupSlots.length<=SEQ_PHRASE_EVERY) return; // nothing to mark yet
+    const bounds=seqGroupBoundaries(groupSlots);
+    const wrapRect=wrapEl.getBoundingClientRect();
+    for(let g=SEQ_PHRASE_EVERY; g<bounds.length; g+=SEQ_PHRASE_EVERY){
+      const stepIdx=bounds[g];
+      const cell=blockEl.querySelector('.step[data-col="'+stepIdx+'"]');
+      if(!cell) continue;
+      const cRect=cell.getBoundingClientRect();
+      const line=document.createElement('div');
+      line.className='seq-phrase-line';
+      // Centered in the (wider) group-gap this boundary already has, so it
+      // reads as "a stronger version of the usual beat gap" rather than a
+      // second, competing divider right next to it.
+      line.style.left=(cRect.left-wrapRect.left-groupGap/2)+'px';
+      line.style.top=(cRect.top-wrapRect.top)+'px';
+      line.style.height=cRect.height+'px';
+      wrapEl.appendChild(line);
+    }
   });
 }
 
