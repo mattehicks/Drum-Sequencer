@@ -654,6 +654,11 @@ canvas{
      instead of flex-shrinking its buttons into an overlapping mess. */
   min-width:126px;
 }
+/* Beat 1's box carries the extra "All" button, so it needs more floor width
+   than every other beat's box -- otherwise low slot counts (1-3 cells,
+   where the JS-measured cell span is narrower than this) flex-shrink All
+   into the -/+/count/C/P buttons instead of just growing past its span. */
+.seq-group-ctrl-first{min-width:158px;}
 .seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px; flex-shrink:0;}
 .seq-copy-btn, .seq-paste-btn{
   width:20px; height:20px;
@@ -696,6 +701,31 @@ canvas{
   backdrop-filter:none;
   -webkit-backdrop-filter:none;
   background:transparent;
+}
+/* "All" (beat 1's box only): sets every beat to beat 1's slot count. Text
+   needs more room than the single-letter C/P buttons, so it's auto-width
+   instead of the fixed 20px square -- everything else (height, radius,
+   glass hover treatment) matches the rest of the strip. Teal accent-2
+   keeps it visually distinct from copy's pink and paste's green. */
+.seq-all-btn{
+  height:20px;
+  padding:0 6px;
+  font-size:10px;
+  font-weight:600;
+  line-height:1;
+  border-radius:5px;
+  cursor:pointer;
+  flex-shrink:0;
+  --glass-rgb:var(--accent-2-rgb);
+  color:var(--accent-2);
+}
+.seq-all-btn:hover{
+  color:var(--accent-2);
+  border-color:rgba(var(--accent-2-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--accent-2-rgb),0.45);
 }
 .seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
@@ -2942,7 +2972,7 @@ function positionGroupControls(){
 // and copy/paste are passed in so the same box markup/behavior serves both.
 function buildGroupCtrlBox(g, count, opts){
   const box=document.createElement('div');
-  box.className='seq-group-ctrl';
+  box.className='seq-group-ctrl'+(g===0?' seq-group-ctrl-first':'');
   // No visible "Beat N" label -- at low slot counts (3 or fewer cells) there
   // isn't room for it alongside -/+/count/C/P without the buttons getting
   // flex-shrunk into an overlapping mess. The box keeps a title/aria-label
@@ -2950,6 +2980,19 @@ function buildGroupCtrlBox(g, count, opts){
   // aria-label, so nothing here loses accessibility by dropping the span.
   box.title='Beat '+(g+1);
   box.setAttribute('aria-label', 'Beat '+(g+1)+' controls');
+
+  // "All" lives only on beat 1's own box, at the very front of it (ahead of
+  // -/count/+): apply beat 1's current slot count to every beat in this
+  // structure in one click, instead of dialing each one to match by hand.
+  if(g===0){
+    const allBtn=document.createElement('button');
+    allBtn.type='button'; allBtn.className='seq-all-btn';
+    allBtn.textContent='All';
+    allBtn.title='Set every beat to this many slots ('+count+')';
+    allBtn.setAttribute('aria-label', 'Set every beat to beat 1\'s slot count');
+    allBtn.addEventListener('click', ()=> opts.setAll(count));
+    box.appendChild(allBtn);
+  }
 
   const dec=document.createElement('button');
   dec.type='button'; dec.className='seq-beats-btn';
@@ -2986,19 +3029,6 @@ function buildGroupCtrlBox(g, count, opts){
 
   box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
   box.appendChild(copyBtn); box.appendChild(pasteBtn);
-
-  // "All" lives only on beat 1's own box: apply beat 1's current slot count
-  // to every beat in this structure in one click, instead of dialing each
-  // one to match by hand.
-  if(g===0){
-    const allBtn=document.createElement('button');
-    allBtn.type='button'; allBtn.className='seq-all-btn';
-    allBtn.textContent='All';
-    allBtn.title='Set every beat to this many slots ('+count+')';
-    allBtn.setAttribute('aria-label', 'Set every beat to beat 1\'s slot count');
-    allBtn.addEventListener('click', ()=> opts.setAll(count));
-    box.appendChild(allBtn);
-  }
   return box;
 }
 
