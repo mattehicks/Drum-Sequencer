@@ -415,7 +415,7 @@ canvas{
 .seq-phrase-line{
   position:absolute;
   width:1px;
-  background:rgba(255,255,255,0.16);
+  background:rgba(255,255,255,0.55);
   pointer-events:none;
 }
 .seq-cells{
@@ -2565,7 +2565,41 @@ function seqWireVolBox(el, row){
   el.addEventListener('contextmenu', (e)=> e.stopPropagation());
 }
 
+// Editing any row-scoped field (Slots per beat, a beat-group dial, LINK/
+// mode, ...) rebuilds the whole row list from scratch below, which destroys
+// the very input the user is still interacting with. Left alone, focus then
+// falls back to <body> -- and from there, the next Tab or Enter the user
+// presses lands wherever the browser's default tab order says, not back on
+// that field, which is how an unrelated toolbar button (Hide Bars, in one
+// report) ends up activated by a keystroke that was meant for the row.
+// Captured before the rebuild and restored after, keyed by row id (not DOM
+// position, which is about to change) plus the field's own class name.
+function seqCaptureFocus(){
+  const el=document.activeElement;
+  if(!el || el===document.body) return null;
+  const block=el.closest && el.closest('.seq-row-block');
+  if(!block || !block.dataset.rowId) return null;
+  return {
+    rowId:block.dataset.rowId,
+    selector:'.'+Array.from(el.classList).join('.'),
+    selStart: (el.selectionStart!=null) ? el.selectionStart : null,
+    selEnd: (el.selectionEnd!=null) ? el.selectionEnd : null,
+  };
+}
+function seqRestoreFocus(saved){
+  if(!saved) return;
+  const block=document.querySelector('.seq-row-block[data-row-id="'+saved.rowId+'"]');
+  if(!block) return;
+  const el=block.querySelector(saved.selector);
+  if(!el) return;
+  el.focus({preventScroll:true});
+  if(saved.selStart!=null && el.setSelectionRange){
+    try{ el.setSelectionRange(saved.selStart, saved.selEnd); }catch(e){}
+  }
+}
+
 function renderSequencer(){
+  const focusSave=seqCaptureFocus();
   const body=document.getElementById('seqRows');
   body.innerHTML='';
   seq.rows.forEach(row=>{
@@ -2591,6 +2625,7 @@ function renderSequencer(){
     const block=document.createElement('div');
     block.className='seq-row-block';
     block.dataset.linked=String(!unlinked);
+    block.dataset.rowId=row.id;
     block.classList.toggle('seq-row-silenced', rowIsSilenced(row));
 
     const rowEl=document.createElement('div');
@@ -2790,6 +2825,7 @@ function renderSequencer(){
   });
   applyPhraseDividers();
   updatePatternApplyTargetOptions();
+  seqRestoreFocus(focusSave);
 }
 
 function seqSetRowVoice(rowId, voiceId){

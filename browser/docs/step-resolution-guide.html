@@ -21,17 +21,15 @@
   p{margin:14px 0;}
   .subtitle{color:var(--subtext); margin-top:0; font-size:16px;}
   .lede{color:var(--subtext); font-size:17px;}
-  img{max-width:100%; border:1px solid var(--border); border-radius:6px; margin:20px 0;}
+  figure{margin:22px 0; padding:0;}
+  figure img{max-width:100%; border:1px solid var(--border); border-radius:6px; display:block; background:#0c0d0f;}
+  figcaption{color:var(--subtext); font-size:13.5px; margin-top:8px; line-height:1.5;}
+  .fig-pair{display:flex; gap:16px; flex-wrap:wrap; margin:22px 0;}
+  .fig-pair figure{flex:1 1 260px; margin:0;}
   code{font-family:var(--mono); background:var(--panel); padding:1px 6px; border-radius:4px; font-size:0.9em; border:1px solid var(--border);}
-  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent-2); border-radius:6px; padding:14px 18px; margin:20px 0;}
-  .callout p{margin:6px 0;}
   .example{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 22px; margin:18px 0;}
   .example p{margin:8px 0;}
   .example .grid-line{font-family:var(--mono); font-size:14px; letter-spacing:1px; color:var(--accent);}
-  table{border-collapse:collapse; width:100%; margin:18px 0; font-size:14.5px;}
-  th,td{border:1px solid var(--border); padding:8px 12px; text-align:left; vertical-align:top;}
-  th{background:var(--panel); color:var(--text);}
-  td{color:var(--subtext);}
   dl{margin:14px 0;}
   dt{font-family:var(--mono); color:var(--accent-2); font-weight:600; margin-top:14px;}
   dd{margin:4px 0 0; color:var(--subtext);}
@@ -45,7 +43,10 @@
 
 <p class="lede">The step grid you're programming isn't just a row of buttons — it's a direct, literal representation of a bar of music, broken down along two separate axes: how the bar is subdivided (structure), and how fast those subdivisions actually play (timing). Understanding the difference between those two axes, and how the per-row independence features build on top of them, is what lets you move from "a row of clicked-on boxes" to an arrangement with real rhythmic character: syncopation, polymeter, dynamics, and phrasing.</p>
 
-<img src="step-resolution-guide.png" alt="The sequencer's toolbar and step grid">
+<figure>
+  <img src="img-toolbars.png" alt="The engine/project toolbar above the sequencer, and the sequencer's own toolbar">
+  <figcaption>The controls that sit above the grid. Top row: Start Engine (the audio engine has to be running before anything makes sound), the Master volume fader, and the project file controls — Save Project and Load Project round-trip the whole project, including every instrument's settings and the full sequencer state; Import Instruments loads only the synth/voice settings from a file, leaving the sequencer pattern untouched. Bottom row: Play, Tempo and Tap Tempo, the Step resolution dropdown, Clear (wipes the pattern), Beats/measure, Zoom, Hide Bars (collapses the per-beat control strips below the grid to save vertical space), M/S (reveals a Mute/Solo strip on every row), and Screenshot (exports a clean image of just the instrument rows and cells).</figcaption>
+</figure>
 
 <h2>The bar, broken into beats, broken into slots</h2>
 
@@ -57,6 +58,11 @@
 
 <p><strong>Slots per beat</strong> sets how many subdivisions each of those beats is cut into, and it's set per row — the green number next to each row's volume. A value of 4 gives you sixteenth notes (the standard, default resolution); 2 gives you eighth notes; 8 gives you thirty-second notes. Its range is 1 to 8.</p>
 
+<figure>
+  <img src="img-row-detail.png" alt="One row of the sequencer, labeled">
+  <figcaption>One row, close up. The number badge and instrument name on the left is also a button — click it to swap the voice this row plays. LINK means this row currently follows the shared Beats/measure structure above; clicking it (or typing a different Slots-per-beat value) gives the row its own independent measure instead, at which point it also gains a LOOP/SYNC choice (see below). The orange number is this row's volume within the pattern, 0–100; the green number is Slots per beat. The M and S buttons — hidden by default, revealed for every row by the toolbar's M/S button — mute or solo that row during playback.</figcaption>
+</figure>
+
 <div class="example">
 <p><strong>Worked example.</strong> Beats/measure = 4, Slots per beat = 4 → 4 × 4 = 16 cells, the default grid. Each cell is a sixteenth note. A basic four-on-the-floor kick lands on cells 1, 5, 9, and 13 — the first slot of every beat:</p>
 <p class="grid-line">[X . . .][. . . .][X . . .][. . . .]   (beat groups in brackets)</p>
@@ -64,6 +70,15 @@
 </div>
 
 <p>This is the reason the two controls behave differently in the interface. Beats/measure is a small, coarse number (how many beats — almost always 3, 4, 5, 6, or occasionally something odd like 7) and a stepper is a reasonable way to set it. Slots per beat is where the actual rhythmic detail lives, so it takes a typed number directly. If you need a bar with more than 12 beats, or you want to build an irregular sequence of beat lengths without clicking a stepper dozens of times, the Text Patterns tool described further down is the intended way to do that — it accepts typed, shorthand input and can set the shared structure to whatever length you want, well past what the stepper's range suggests.</p>
+
+<h3>Setting one beat differently from the rest</h3>
+
+<p>Slots per beat sets a uniform value across every beat in a row, which covers most patterns. When you need one specific beat to have a different subdivision than the others — a fill only on beat 4, say, while beats 1–3 stay plain — the floating strip beneath the grid gives you that finer control directly, one beat-group at a time, each with its own −/+ stepper, a C (copy) button and a P (paste) button for moving one beat's programmed pattern onto another.</p>
+
+<figure>
+  <img src="img-beat-groups.png" alt="The shared per-beat control strip beneath the grid">
+  <figcaption>The floating Beat 1 / Beat 2 / Beat 3 / Beat 4 strip beneath the grid. Each box's −/+ sets that one beat-group's own slot count independently — useful for a bar where only one beat needs a denser subdivision. C copies that beat's currently-programmed pattern; P pastes a previously-copied beat onto another one, which is the fastest way to duplicate a fill across several beats. An unlinked row gets this exact same strip, scoped to its own beats, directly beneath its cells.</figcaption>
+</figure>
 
 <h2>Step resolution: how fast the grid you built actually plays</h2>
 
@@ -81,26 +96,51 @@
 
 <dl>
 <dt>LOOP (polymeter)</dt>
-<dd>The row plays its own steps at the same fixed duration as everything else, but runs through its own total step count as its own independent loop. If the shared kit's bar is 16 steps and this row's own bar is 12 steps, the row completes its cycle four steps sooner and restarts — so it drifts out of phase with the rest of the kit, realigning only once both loops reach a common multiple. This is <em>polymeter</em>: same underlying pulse, different bar lengths, phase drift as a deliberate, evolving effect. It's how a lot of minimalist and math-rock rhythm parts are built, and it's why a LOOP row's grid is drawn at native width rather than stretched — the picture is honestly showing you that the row is a different length in real time, not the same length rendered differently.</dd>
+<dd>The row plays its own steps at the same fixed duration as everything else, but runs through its own total step count as its own independent loop. If the shared kit's bar is 16 steps and this row's own bar is 12 steps, the row completes its cycle four steps sooner and restarts — so it drifts out of phase with the rest of the kit, realigning only once both loops reach a common multiple. This is <em>polymeter</em>: same underlying pulse, different bar lengths, phase drift as a deliberate, evolving effect. It's how a lot of minimalist and math-rock rhythm parts are built.</dd>
 <dt>SYNC (polyrhythm / subdivision)</dt>
-<dd>The row's entire step count — however many cells it has — is squeezed or stretched to fit into exactly one shared bar, every single bar, realigning at the start of every measure without drift. A SYNC row with 8 slots per beat against a shared grid of 4 slots per beat isn't a longer loop that happens to phase — it's a genuine 2-against-1 subdivision, the same relationship as playing straight eighth notes against sixteenth-note triplets. This is why the grid visibly narrows a SYNC row's cells: each one now represents a smaller, exact fraction of the same beat everything else is playing, not a fixed absolute duration.</dd>
+<dd>The row's entire step count — however many cells it has — is squeezed or stretched to fit into exactly one shared bar, every single bar, realigning at the start of every measure without drift. A SYNC row with 8 slots per beat against a shared grid of 4 slots per beat isn't a longer loop that happens to phase — it's a genuine 2-against-1 subdivision, the same relationship as playing straight eighth notes against sixteenth-note triplets.</dd>
 </dl>
 
-<p>Neither choice is "correct" — they're different compositional tools. Use LOOP when you want a part to genuinely cycle at its own length and slowly rotate against the rest of the arrangement (a classic polymetric technique for generating variation without programming every bar by hand). Use SYNC when you want a busier or sparser subdivision that still locks to the same one-bar phrase as everything else, which is the far more common case for a straightforward fill or a denser hi-hat pattern.</p>
+<div class="fig-pair">
+  <figure>
+    <img src="img-loop-mode.png" alt="LOOP mode: Kick at 4 slots per beat, Snare unlinked at 8, both at native cell width">
+    <figcaption>LOOP. Kick stays linked at the default 4 slots per beat. Snare has been given its own 8 slots per beat and left in LOOP mode — its cells stay the same width as the Kick's, so with twice as many of them, its row is simply twice as long and wraps onto a second line. It genuinely takes longer to loop than the Kick does.</figcaption>
+  </figure>
+  <figure>
+    <img src="img-sync-mode.png" alt="SYNC mode: the same Snare row now compressed to match the Kick's total width">
+    <figcaption>SYNC. The same Snare row, switched to SYNC instead. Its 8 cells per beat now compress to fit the exact same total width as the Kick's 4 — genuine thirty-second-note subdivisions of the same one bar, not a longer loop. This is also the way to get real, clickable 32nd-note cells that stay locked to the project's current tempo and bar length, rather than just playing existing sixteenth-note cells back faster.</figcaption>
+  </figure>
+</div>
+
+<p>Neither choice is "correct" — they're different compositional tools. Use LOOP when you want a part to genuinely cycle at its own length and slowly rotate against the rest of the arrangement, a classic polymetric technique for generating variation without programming every bar by hand. Use SYNC when you want a busier or sparser subdivision that still locks to the same one-bar phrase as everything else, which is the far more common case for a straightforward fill or a denser hi-hat pattern — and the only way to get cells that are genuinely faster subdivisions of the current bar rather than a same-speed row that's simply longer.</p>
 
 <h2>Dynamics: row volume and per-step velocity</h2>
 
 <p>A pattern made entirely of full-strength hits reads as mechanical no matter how interesting the rhythm is — real playing lives in the dynamics. Two separate controls exist for this, at two different scopes:</p>
 
-<p><strong>Row volume</strong> (the orange number next to each row) is a single, constant level for that row within this pattern — useful for balancing a kit relative to itself, for example keeping hi-hats well under the kick and snare, or bringing a percussion layer in quietly under the main pattern. It's separate from the instrument's own Level parameter, which is a property of the voice itself and stays constant across every row and pattern that uses it.</p>
+<p><strong>Row volume</strong> (the orange number next to each row, visible in the row close-up above) is a single, constant level for that row within this pattern — useful for balancing a kit relative to itself, for example keeping hi-hats well under the kick and snare, or bringing a percussion layer in quietly under the main pattern. It's separate from the instrument's own Level parameter, which is a property of the voice itself and stays constant across every row and pattern that uses it.</p>
 
 <p><strong>Per-step velocity</strong> (shift-drag any lit cell) sets that one hit's individual strength, 0–100, with a live numeric readout while you drag. This is where ghost notes and accents come from: a snare backbeat at full velocity with quiet, low-velocity ghost notes filling the gaps between it is the single most common technique for turning a flat, programmed snare part into something that feels played. The same tool works for building a crescendo into a fill — a run of cells with steadily increasing velocity reads as a drummer building energy into a hit, not just "more notes."</p>
 
+<h2>Reading a long or busy measure: the phrase line</h2>
+
+<p>Once a row has more than a handful of beats — a shared structure raised past 8 or 9, or a row built from a long Text Pattern below — the ordinary gap between beats stops being enough to read the bar at a glance. A second, slightly stronger marker appears automatically every 4 beats to break the row into readable four-beat phrases, the way sheet music groups bars into lines.</p>
+
+<figure>
+  <img src="img-phrase-divider.png" alt="A faint vertical line marking every 4th beat across several rows">
+  <figcaption>The phrase line (brightened here for legibility; it's subtler in the live app) falls between beat 4 and beat 5 in this 8-beat bar. It's computed per row against that row's own beat count, so an unlinked row with its own, different structure gets its own correctly-placed markers rather than inheriting the shared row's.</figcaption>
+</figure>
+
 <h2>Building long or irregular measures: Text Patterns and Arrangement</h2>
 
-<p>The Beats/measure stepper tops out at 12, and clicking it repeatedly to build something long and specific — say, a real transcription of an odd, changing structure like the sixteen-beat measure used in the Hunter sample — is slow and error-prone. The Text Patterns panel is the typed alternative: instead of clicking a stepper, you write the beat structure as a short list of (slot count × repeat count) pairs. <code>7×4, 2×1, 7×4, 3×1</code> expands to ten beats — <code>7, 7, 7, 7, 2, 7, 7, 7, 7, 3</code> — typed in four pairs instead of clicked ten times.</p>
+<p>The Beats/measure stepper tops out at 12, and clicking it repeatedly to build something long and specific is slow and error-prone. The Text Patterns panel is the typed alternative: instead of clicking a stepper, you write the beat structure as a short list of (slot count × repeat count) pairs, and multiple named patterns can be chained into an <strong>arrangement</strong> that concatenates their expansions into one long beat list.</p>
 
-<p>Multiple named patterns (A, B, C…) can be chained into an <strong>arrangement</strong> — a sequence like A, A, B, A — which concatenates their expansions into one long beat list. "Apply to Sequencer" then writes that list to whichever target you choose from the dropdown: either the shared structure (which sets Beats/measure directly to however many beats the expansion produced, with no 12-beat ceiling) or one specific row, which unlinks that row and gives it exactly that beat structure on its own. This is the direct, typed-entry path to a long or irregular measure that the pluses and minuses alone aren't built for — reach for it whenever you're transcribing something with a beat count higher than 12, or a structure that changes shape partway through the bar.</p>
+<figure>
+  <img src="img-text-patterns.png" alt="The Text Patterns / Arrangement panel">
+  <figcaption>Pattern A is written as four pairs — 7×4, 2×1, 7×4, 3×1 — and expands automatically to <code>7-7-7-7-2-7-7-7-7-3</code>: ten beats, sixty-one total slots, typed in four pairs instead of clicked ten times. Pattern B is a second, shorter structure. The Arrangement row below chains pattern references — here A, A, B, A — concatenating their expansions into one long beat list, shown in the preview line beneath it. "Apply to Sequencer" then writes that full list to whichever target is chosen from the dropdown: the shared structure (which sets Beats/measure directly, with no 12-beat ceiling) or one specific row, which unlinks that row and gives it exactly that beat structure on its own.</figcaption>
+</figure>
+
+<p>Reach for this whenever you're transcribing something with a beat count higher than 12, or a structure that changes shape partway through the bar — it's the direct, typed-entry path to a long or irregular measure that the pluses and minuses alone aren't built for.</p>
 
 <h2>Putting it together</h2>
 
