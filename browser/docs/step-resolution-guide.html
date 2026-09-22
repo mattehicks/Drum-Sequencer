@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Bars, beats, slots, and step resolution — D20 Synth Workbench</title>
+<title>Meter, Subdivision, and Groove — D20 Synth Workbench</title>
 <style>
   :root{
     --bg:#121316; --panel:#1a1c20; --border:#2c2e33;
@@ -12,95 +12,129 @@
   body{
     background:var(--bg); color:var(--text);
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    max-width:980px; margin:0 auto; padding:32px 24px 80px;
-    line-height:1.55;
+    max-width:840px; margin:0 auto; padding:40px 24px 100px;
+    line-height:1.7; font-size:16px;
   }
-  h1{font-size:28px; margin-bottom:6px;}
-  h2{font-size:19px; margin-top:40px; border-top:1px solid var(--border); padding-top:24px;}
-  h3{font-size:15px; color:var(--accent); margin-bottom:6px;}
-  p{color:var(--text); margin:10px 0;}
-  .subtitle{color:var(--subtext); margin-top:0;}
-  img{max-width:100%; border:1px solid var(--border); border-radius:6px; margin:16px 0;}
-  code{font-family:var(--mono); background:var(--panel); padding:1px 6px; border-radius:4px; font-size:0.92em; border:1px solid var(--border);}
-  .axis{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin:14px 0;}
-  .axis.struct{border-left:4px solid var(--accent);}
-  .axis.timing{border-left:4px solid var(--accent-2);}
-  ul{padding-left:22px;}
-  li{margin:8px 0;}
-  .callouts{display:grid; grid-template-columns:1fr 1fr; gap:6px 28px;}
-  .callout{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px;}
-  .callout .num{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-weight:bold; font-size:13px; color:#15151a; margin-right:8px;}
-  .num.struct{background:var(--accent);}
-  .num.timing{background:var(--accent-2);}
-  .num.misc{background:#8cdc8c;}
-  .callout h3{display:inline; color:var(--text); font-size:14.5px;}
-  .callout p{margin:6px 0 0; color:var(--subtext); font-size:14px;}
-  .example{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 20px;}
-  .example li{font-family:var(--mono); font-size:13.5px; color:var(--text);}
-  footer{color:var(--subtext); font-size:12px; margin-top:60px; border-top:1px solid var(--border); padding-top:16px;}
-  @media (max-width:700px){ .callouts{grid-template-columns:1fr;} }
+  h1{font-size:30px; margin-bottom:4px; line-height:1.25;}
+  h2{font-size:21px; margin-top:52px; padding-top:28px; border-top:1px solid var(--border); color:var(--text);}
+  h3{font-size:16px; color:var(--accent); margin-top:28px; margin-bottom:4px;}
+  p{margin:14px 0;}
+  .subtitle{color:var(--subtext); margin-top:0; font-size:16px;}
+  .lede{color:var(--subtext); font-size:17px;}
+  img{max-width:100%; border:1px solid var(--border); border-radius:6px; margin:20px 0;}
+  code{font-family:var(--mono); background:var(--panel); padding:1px 6px; border-radius:4px; font-size:0.9em; border:1px solid var(--border);}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent-2); border-radius:6px; padding:14px 18px; margin:20px 0;}
+  .callout p{margin:6px 0;}
+  .example{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 22px; margin:18px 0;}
+  .example p{margin:8px 0;}
+  .example .grid-line{font-family:var(--mono); font-size:14px; letter-spacing:1px; color:var(--accent);}
+  table{border-collapse:collapse; width:100%; margin:18px 0; font-size:14.5px;}
+  th,td{border:1px solid var(--border); padding:8px 12px; text-align:left; vertical-align:top;}
+  th{background:var(--panel); color:var(--text);}
+  td{color:var(--subtext);}
+  dl{margin:14px 0;}
+  dt{font-family:var(--mono); color:var(--accent-2); font-weight:600; margin-top:14px;}
+  dd{margin:4px 0 0; color:var(--subtext);}
+  footer{color:var(--subtext); font-size:12px; margin-top:70px; border-top:1px solid var(--border); padding-top:16px;}
 </style>
 </head>
 <body>
 
-<h1>Bars, beats, slots, and step resolution</h1>
-<p class="subtitle">D20 Synth Workbench — sequencer structure reference</p>
+<h1>Meter, Subdivision, and Groove</h1>
+<p class="subtitle">How the D20 Synth Workbench sequencer's grid maps to real musical structure</p>
 
-<img src="step-resolution-guide.png" alt="Annotated screenshot of the sequencer toolbar and grid">
+<p class="lede">The step grid you're programming isn't just a row of buttons — it's a direct, literal representation of a bar of music, broken down along two separate axes: how the bar is subdivided (structure), and how fast those subdivisions actually play (timing). Understanding the difference between those two axes, and how the per-row independence features build on top of them, is what lets you move from "a row of clicked-on boxes" to an arrangement with real rhythmic character: syncopation, polymeter, dynamics, and phrasing.</p>
 
-<h2>Two independent axes</h2>
+<img src="step-resolution-guide.png" alt="The sequencer's toolbar and step grid">
 
-<div class="axis struct">
-  <h3>Structure — how many cells exist</h3>
-  <p><code>Beats / measure</code> (the global stepper, 2–12) times <code>Slots per beat</code> (per-row, 1–8, set either by typing into the row's own field or via the floating <code>Beat N</code> box's −/+ buttons). Changing either of these adds or removes actual step cells from the grid.</p>
-</div>
+<h2>The bar, broken into beats, broken into slots</h2>
 
-<div class="axis timing">
-  <h3>Timing — how fast the existing cells play</h3>
-  <p><code>Step</code> resolution — 1/8, 1/16, or 1/32 (<code>seq.stepDivision</code>) — multiplies seconds-per-step. It changes nothing about how many cells are on screen; it only changes how much real time passes between one cell and the next.</p>
-</div>
+<p>Every acoustic or electronic groove is built on a hierarchy: a piece has a tempo, the tempo is organized into bars (measures), each bar contains a fixed number of beats, and each beat can itself be subdivided into smaller units — eighth notes, sixteenth notes, triplets, and so on. A standard drum-machine pattern in 4/4 time, programmed at sixteenth-note resolution, has 4 beats per bar and 4 sixteenth-note slots per beat, for 16 total steps — which is exactly what a "16-step sequencer" means, and exactly what this grid defaults to.</p>
 
-<p>These two axes are orthogonal by design. Raising the step resolution does not add cells, and adding cells does not change how fast each one plays.</p>
+<p>The workbench exposes that hierarchy directly as two separate controls, and their product is the actual number of clickable cells you see:</p>
 
-<h2>Worked example</h2>
+<p><strong>Beats / measure</strong> sets how many beats are in the bar — the top-level meter. This is a global setting shared by every row unless a row is deliberately given its own, and it's adjusted with a plain −/+ stepper, from 2 up to 12.</p>
+
+<p><strong>Slots per beat</strong> sets how many subdivisions each of those beats is cut into, and it's set per row — the green number next to each row's volume. A value of 4 gives you sixteenth notes (the standard, default resolution); 2 gives you eighth notes; 8 gives you thirty-second notes. Its range is 1 to 8.</p>
+
 <div class="example">
-<ul>
-  <li><code>Beats/measure = 4</code>, <code>Slots per beat = 4</code> &rarr; 16 cells total (the default grid).</li>
-  <li>Same 16 cells at <code>Step = 1/16</code> (default): each cell is a sixteenth note, 4 cells per quarter-note beat, a 4/4 bar takes 4 beats to play through.</li>
-  <li>Same 16 cells at <code>Step = 1/32</code>: each cell now plays twice as fast, so the same 16-cell pattern finishes in half the time — same shape, compressed.</li>
-  <li>To get 32 distinct hittable cells in one bar (a true 32nd-note roll across the whole bar), you need <code>Slots per beat = 8</code>, not just a faster <code>Step</code> setting.</li>
-</ul>
+<p><strong>Worked example.</strong> Beats/measure = 4, Slots per beat = 4 → 4 × 4 = 16 cells, the default grid. Each cell is a sixteenth note. A basic four-on-the-floor kick lands on cells 1, 5, 9, and 13 — the first slot of every beat:</p>
+<p class="grid-line">[X . . .][. . . .][X . . .][. . . .]   (beat groups in brackets)</p>
+<p>Raise Slots per beat to 8 on the snare row and you can now place a snare not just on beat 3 (the backbeat) but roll it — two, three, or four quick hits leading into the backbeat, the way a real drummer decorates a fill — because there are now twice as many addressable positions inside every beat on that row.</p>
 </div>
 
-<h2>Why "16" and "8" don't type in</h2>
-<ul>
-  <li><strong>Beats / measure</strong> (callout 4) has no text box on this build — only the −/+ stepper buttons, capped 2–12. There is nothing to type a number into; clicking + repeatedly is currently the only way to raise it. This is almost certainly the "entering 16 does not work" report.</li>
-  <li><strong>Slots per beat</strong> (callout 8) is a real number field and does accept typing, but its hard ceiling is 8 (<code>SEQ_SLOTS_MIN=1</code>, <code>SEQ_SLOTS_MAX=8</code>). Typing 16 gets silently clamped down to 8 on blur, with no visible message — which looks identical to the field "not working."</li>
-  <li>8 slots/beat already matches the finest available step resolution (1/32 = eight 32nd-notes per quarter-note beat), so 8 is the correct current ceiling for this feature set, not a bug. The silent clamp with no feedback is worth fixing, and <strong>Beats / measure</strong> could get a typed-entry option the same way.</li>
-</ul>
+<p>This is the reason the two controls behave differently in the interface. Beats/measure is a small, coarse number (how many beats — almost always 3, 4, 5, 6, or occasionally something odd like 7) and a stepper is a reasonable way to set it. Slots per beat is where the actual rhythmic detail lives, so it takes a typed number directly. If you need a bar with more than 12 beats, or you want to build an irregular sequence of beat lengths without clicking a stepper dozens of times, the Text Patterns tool described further down is the intended way to do that — it accepts typed, shorthand input and can set the shared structure to whatever length you want, well past what the stepper's range suggests.</p>
 
-<h2>Toolbar and row controls</h2>
-<p class="subtitle">Numbers match the callouts in the screenshot above.</p>
-<div class="callouts">
-  <div class="callout"><span class="num timing">1</span><h3>Tempo slider</h3><p>Sets BPM. Pure timing, no effect on cell count.</p></div>
-  <div class="callout"><span class="num timing">2</span><h3>Tap Tempo</h3><p>Sets the same BPM by tapping in rhythm instead of dragging.</p></div>
-  <div class="callout"><span class="num timing">3</span><h3>Step (resolution): 1/8, 1/16, 1/32</h3><p><code>seq.stepDivision</code>. How much real time one existing cell represents. Playback-speed multiplier only.</p></div>
-  <div class="callout"><span class="num struct">4</span><h3>Beats / measure (global, 2–12)</h3><p>How many beat-groups the shared bar has. Stepper only, no text box.</p></div>
-  <div class="callout"><span class="num misc">5</span><h3>Zoom</h3><p>Visual cell size on screen only, no effect on timing or count.</p></div>
-  <div class="callout"><span class="num misc">6</span><h3>LINK / OWN (per row)</h3><p>LINK follows the shared Beats/measure grid above. OWN gives the row its own independent measure, plus a LOOP/SYNC choice for how it relates to the shared bar.</p></div>
-  <div class="callout"><span class="num misc">7</span><h3>Row volume (orange number)</h3><p>This row's volume within the pattern (0–100), separate from the instrument's own Level.</p></div>
-  <div class="callout"><span class="num struct">8</span><h3>Slots per beat (green number, per row)</h3><p><code>rowSetUniformSlotsPerBeat()</code>. Real text box, min 1, max 8.</p></div>
-  <div class="callout"><span class="num struct">9</span><h3>One beat's worth of cells</h3><p>The visible gap between groups of cells marks a beat boundary. Total visible cells for a row = beats (global, or the row's own if OWN) &times; slots per beat for that row.</p></div>
-  <div class="callout"><span class="num struct">10</span><h3>Beat N floating box (per beat-group)</h3><p>−/+ steps that one beat-group's own slot count (still capped 1–8, stepper only). C/P copy and paste one beat's pattern onto another.</p></div>
+<h2>Step resolution: how fast the grid you built actually plays</h2>
+
+<p>Everything above is about <em>structure</em> — how many boxes exist. The <strong>Step</strong> dropdown (1/8, 1/16, 1/32) is a completely separate axis: <em>timing</em>. It sets how much real time a single existing cell represents, as a note value, independent of how many cells there are.</p>
+
+<p>Concretely: at a fixed tempo, switching Step from 1/16 to 1/32 does not add a single cell to the grid. It halves the real-time duration of every cell that's already there, so the same 16-cell pattern you programmed now plays through in half the time — the shape is identical, just compressed. If what you actually want is a genuine 32nd-note drum roll — twice as many distinct, individually-addressable hits inside the same musical time — that's a structural change (raise Slots per beat to 8 on that row), not a timing change. The two are easy to conflate because they both involve "32nds," but one adds notes and the other just plays existing notes faster.</p>
+
+<p>Tempo itself (the BPM slider, or Tap Tempo if you'd rather set it by feel than by dragging) multiplies on top of step resolution the same way it would for a live drummer: a sixteenth note at 90 BPM is a specific, longer duration than a sixteenth note at 160 BPM, but it's still "a sixteenth note" structurally in both cases.</p>
+
+<h2>Giving a row its own time: polymeter and polyrhythm</h2>
+
+<p>By default every row is <strong>linked</strong> — it shares the exact same beat count and subdivision as the rest of the kit, which is what you want for a conventional groove where the whole kit breathes together. But real arrangements often break that symmetry on purpose: a hi-hat pattern that repeats every 3 beats against a kick and snare that repeat every 4, a shaker that runs a five-against-four cross-rhythm, or a fill that briefly speeds up just one voice. The workbench supports this by letting you <strong>unlink</strong> any row (click its LINK badge, or just set that row's own Slots per beat, which unlinks it automatically) so it gets its own independent beat structure.</p>
+
+<p>Once a row is unlinked, it also carries a second, separate choice — <strong>LOOP</strong> or <strong>SYNC</strong> — and this is the part that's genuinely a musical decision, not just a display setting, because it changes what the row actually plays, not only how it's drawn.</p>
+
+<dl>
+<dt>LOOP (polymeter)</dt>
+<dd>The row plays its own steps at the same fixed duration as everything else, but runs through its own total step count as its own independent loop. If the shared kit's bar is 16 steps and this row's own bar is 12 steps, the row completes its cycle four steps sooner and restarts — so it drifts out of phase with the rest of the kit, realigning only once both loops reach a common multiple. This is <em>polymeter</em>: same underlying pulse, different bar lengths, phase drift as a deliberate, evolving effect. It's how a lot of minimalist and math-rock rhythm parts are built, and it's why a LOOP row's grid is drawn at native width rather than stretched — the picture is honestly showing you that the row is a different length in real time, not the same length rendered differently.</dd>
+<dt>SYNC (polyrhythm / subdivision)</dt>
+<dd>The row's entire step count — however many cells it has — is squeezed or stretched to fit into exactly one shared bar, every single bar, realigning at the start of every measure without drift. A SYNC row with 8 slots per beat against a shared grid of 4 slots per beat isn't a longer loop that happens to phase — it's a genuine 2-against-1 subdivision, the same relationship as playing straight eighth notes against sixteenth-note triplets. This is why the grid visibly narrows a SYNC row's cells: each one now represents a smaller, exact fraction of the same beat everything else is playing, not a fixed absolute duration.</dd>
+</dl>
+
+<p>Neither choice is "correct" — they're different compositional tools. Use LOOP when you want a part to genuinely cycle at its own length and slowly rotate against the rest of the arrangement (a classic polymetric technique for generating variation without programming every bar by hand). Use SYNC when you want a busier or sparser subdivision that still locks to the same one-bar phrase as everything else, which is the far more common case for a straightforward fill or a denser hi-hat pattern.</p>
+
+<h2>Dynamics: row volume and per-step velocity</h2>
+
+<p>A pattern made entirely of full-strength hits reads as mechanical no matter how interesting the rhythm is — real playing lives in the dynamics. Two separate controls exist for this, at two different scopes:</p>
+
+<p><strong>Row volume</strong> (the orange number next to each row) is a single, constant level for that row within this pattern — useful for balancing a kit relative to itself, for example keeping hi-hats well under the kick and snare, or bringing a percussion layer in quietly under the main pattern. It's separate from the instrument's own Level parameter, which is a property of the voice itself and stays constant across every row and pattern that uses it.</p>
+
+<p><strong>Per-step velocity</strong> (shift-drag any lit cell) sets that one hit's individual strength, 0–100, with a live numeric readout while you drag. This is where ghost notes and accents come from: a snare backbeat at full velocity with quiet, low-velocity ghost notes filling the gaps between it is the single most common technique for turning a flat, programmed snare part into something that feels played. The same tool works for building a crescendo into a fill — a run of cells with steadily increasing velocity reads as a drummer building energy into a hit, not just "more notes."</p>
+
+<h2>Building long or irregular measures: Text Patterns and Arrangement</h2>
+
+<p>The Beats/measure stepper tops out at 12, and clicking it repeatedly to build something long and specific — say, a real transcription of an odd, changing structure like the sixteen-beat measure used in the Hunter sample — is slow and error-prone. The Text Patterns panel is the typed alternative: instead of clicking a stepper, you write the beat structure as a short list of (slot count × repeat count) pairs. <code>7×4, 2×1, 7×4, 3×1</code> expands to ten beats — <code>7, 7, 7, 7, 2, 7, 7, 7, 7, 3</code> — typed in four pairs instead of clicked ten times.</p>
+
+<p>Multiple named patterns (A, B, C…) can be chained into an <strong>arrangement</strong> — a sequence like A, A, B, A — which concatenates their expansions into one long beat list. "Apply to Sequencer" then writes that list to whichever target you choose from the dropdown: either the shared structure (which sets Beats/measure directly to however many beats the expansion produced, with no 12-beat ceiling) or one specific row, which unlinks that row and gives it exactly that beat structure on its own. This is the direct, typed-entry path to a long or irregular measure that the pluses and minuses alone aren't built for — reach for it whenever you're transcribing something with a beat count higher than 12, or a structure that changes shape partway through the bar.</p>
+
+<h2>Putting it together</h2>
+
+<p>A fully arranged bar in this tool is really four decisions layered on top of each other: how many beats it has and how finely each is cut (structure), how fast those cuts actually play at the current tempo (step resolution), which instruments should break away from the shared meter entirely and how they should relate to it when they do (LOOP or SYNC), and how hard and how consistently each hit should land (row volume and per-step velocity).</p>
+
+<div class="example">
+<p><strong>Example: a half-time groove with a rolling snare and a polymetric hi-hat.</strong></p>
+<p>Beats/measure = 4, kick and snare left at the default 4 slots per beat and linked (16 steps, sixteenth-note grid). Kick on beats 1 and 3, snare on beat 3's backbeat with three quiet, ascending-velocity ghost notes leading into it for a roll. Hi-hat unlinked, its own Slots per beat raised to 6 and left in LOOP mode instead of SYNC — so it repeats every 6 steps against the kit's 16, its accent pattern rotating to a new position in the bar each time through, adding movement without anyone touching a single cell after the first pass. Step resolution left at 1/16 throughout; Tempo (or Tap Tempo) set to taste. That's a complete, dynamic, non-repetitive bar built entirely from the controls above.</p>
 </div>
 
-<h2>Quick glossary</h2>
-<ul>
-  <li><strong>Bar / measure</strong> — the repeating structural unit, made of beats.</li>
-  <li><strong>Beat</strong> — one pulse of the bar's beats/measure count.</li>
-  <li><strong>Slot / step / cell</strong> — one hittable box in the grid; slots-per-beat sets how many exist inside each beat.</li>
-  <li><strong>Step resolution</strong> — the note value one existing cell represents in real time (1/8, 1/16, 1/32); playback speed, not cell count.</li>
-</ul>
+<h2>Glossary</h2>
+
+<dl>
+<dt>Bar / measure</dt>
+<dd>The repeating structural unit of the pattern, made up of a fixed number of beats.</dd>
+<dt>Beat</dt>
+<dd>One pulse of the bar's Beats/measure count — the top-level meter.</dd>
+<dt>Slot / step / cell</dt>
+<dd>One clickable box in the grid. Slots per beat sets how many exist inside each beat.</dd>
+<dt>Step resolution</dt>
+<dd>The note value one existing cell represents in real time (1/8, 1/16, 1/32) — a playback-speed multiplier, not a cell count.</dd>
+<dt>Linked / unlinked (LINK / OWN)</dt>
+<dd>Whether a row follows the shared beat structure or has been given its own, independent one.</dd>
+<dt>LOOP</dt>
+<dd>An unlinked row plays its own step count as its own independent, fixed-tempo loop — polymeter, phasing against the shared bar over time.</dd>
+<dt>SYNC</dt>
+<dd>An unlinked row's full step count is fit into exactly one shared bar every time — polyrhythm/subdivision, realigning every measure.</dd>
+<dt>Row volume</dt>
+<dd>A row's constant level within this one pattern, separate from the instrument's own Level.</dd>
+<dt>Velocity</dt>
+<dd>A single hit's individual strength (0–100), set by shift-dragging a cell — the source of accents and ghost notes.</dd>
+<dt>Text Patterns / Arrangement</dt>
+<dd>A typed shorthand for building long or irregular beat structures, applied to either the shared grid or a single row.</dd>
+</dl>
 
 <footer>D20 Synth Workbench — browser/docs/step-resolution-guide.html</footer>
 
