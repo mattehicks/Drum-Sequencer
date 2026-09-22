@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bars, beats, slots, and step resolution — D20 Synth Workbench</title>
+<style>
+  :root{
+    --bg:#121316; --panel:#1a1c20; --border:#2c2e33;
+    --text:#e6e6ea; --subtext:#a9adb4; --accent:#ff8c3c; --accent-2:#5aaaff;
+    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    max-width:980px; margin:0 auto; padding:32px 24px 80px;
+    line-height:1.55;
+  }
+  h1{font-size:28px; margin-bottom:6px;}
+  h2{font-size:19px; margin-top:40px; border-top:1px solid var(--border); padding-top:24px;}
+  h3{font-size:15px; color:var(--accent); margin-bottom:6px;}
+  p{color:var(--text); margin:10px 0;}
+  .subtitle{color:var(--subtext); margin-top:0;}
+  img{max-width:100%; border:1px solid var(--border); border-radius:6px; margin:16px 0;}
+  code{font-family:var(--mono); background:var(--panel); padding:1px 6px; border-radius:4px; font-size:0.92em; border:1px solid var(--border);}
+  .axis{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin:14px 0;}
+  .axis.struct{border-left:4px solid var(--accent);}
+  .axis.timing{border-left:4px solid var(--accent-2);}
+  ul{padding-left:22px;}
+  li{margin:8px 0;}
+  .callouts{display:grid; grid-template-columns:1fr 1fr; gap:6px 28px;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px;}
+  .callout .num{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-weight:bold; font-size:13px; color:#15151a; margin-right:8px;}
+  .num.struct{background:var(--accent);}
+  .num.timing{background:var(--accent-2);}
+  .num.misc{background:#8cdc8c;}
+  .callout h3{display:inline; color:var(--text); font-size:14.5px;}
+  .callout p{margin:6px 0 0; color:var(--subtext); font-size:14px;}
+  .example{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 20px;}
+  .example li{font-family:var(--mono); font-size:13.5px; color:var(--text);}
+  footer{color:var(--subtext); font-size:12px; margin-top:60px; border-top:1px solid var(--border); padding-top:16px;}
+  @media (max-width:700px){ .callouts{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<h1>Bars, beats, slots, and step resolution</h1>
+<p class="subtitle">D20 Synth Workbench — sequencer structure reference</p>
+
+<img src="step-resolution-guide.png" alt="Annotated screenshot of the sequencer toolbar and grid">
+
+<h2>Two independent axes</h2>
+
+<div class="axis struct">
+  <h3>Structure — how many cells exist</h3>
+  <p><code>Beats / measure</code> (the global stepper, 2–12) times <code>Slots per beat</code> (per-row, 1–8, set either by typing into the row's own field or via the floating <code>Beat N</code> box's −/+ buttons). Changing either of these adds or removes actual step cells from the grid.</p>
+</div>
+
+<div class="axis timing">
+  <h3>Timing — how fast the existing cells play</h3>
+  <p><code>Step</code> resolution — 1/8, 1/16, or 1/32 (<code>seq.stepDivision</code>) — multiplies seconds-per-step. It changes nothing about how many cells are on screen; it only changes how much real time passes between one cell and the next.</p>
+</div>
+
+<p>These two axes are orthogonal by design. Raising the step resolution does not add cells, and adding cells does not change how fast each one plays.</p>
+
+<h2>Worked example</h2>
+<div class="example">
+<ul>
+  <li><code>Beats/measure = 4</code>, <code>Slots per beat = 4</code> &rarr; 16 cells total (the default grid).</li>
+  <li>Same 16 cells at <code>Step = 1/16</code> (default): each cell is a sixteenth note, 4 cells per quarter-note beat, a 4/4 bar takes 4 beats to play through.</li>
+  <li>Same 16 cells at <code>Step = 1/32</code>: each cell now plays twice as fast, so the same 16-cell pattern finishes in half the time — same shape, compressed.</li>
+  <li>To get 32 distinct hittable cells in one bar (a true 32nd-note roll across the whole bar), you need <code>Slots per beat = 8</code>, not just a faster <code>Step</code> setting.</li>
+</ul>
+</div>
+
+<h2>Why "16" and "8" don't type in</h2>
+<ul>
+  <li><strong>Beats / measure</strong> (callout 4) has no text box on this build — only the −/+ stepper buttons, capped 2–12. There is nothing to type a number into; clicking + repeatedly is currently the only way to raise it. This is almost certainly the "entering 16 does not work" report.</li>
+  <li><strong>Slots per beat</strong> (callout 8) is a real number field and does accept typing, but its hard ceiling is 8 (<code>SEQ_SLOTS_MIN=1</code>, <code>SEQ_SLOTS_MAX=8</code>). Typing 16 gets silently clamped down to 8 on blur, with no visible message — which looks identical to the field "not working."</li>
+  <li>8 slots/beat already matches the finest available step resolution (1/32 = eight 32nd-notes per quarter-note beat), so 8 is the correct current ceiling for this feature set, not a bug. The silent clamp with no feedback is worth fixing, and <strong>Beats / measure</strong> could get a typed-entry option the same way.</li>
+</ul>
+
+<h2>Toolbar and row controls</h2>
+<p class="subtitle">Numbers match the callouts in the screenshot above.</p>
+<div class="callouts">
+  <div class="callout"><span class="num timing">1</span><h3>Tempo slider</h3><p>Sets BPM. Pure timing, no effect on cell count.</p></div>
+  <div class="callout"><span class="num timing">2</span><h3>Tap Tempo</h3><p>Sets the same BPM by tapping in rhythm instead of dragging.</p></div>
+  <div class="callout"><span class="num timing">3</span><h3>Step (resolution): 1/8, 1/16, 1/32</h3><p><code>seq.stepDivision</code>. How much real time one existing cell represents. Playback-speed multiplier only.</p></div>
+  <div class="callout"><span class="num struct">4</span><h3>Beats / measure (global, 2–12)</h3><p>How many beat-groups the shared bar has. Stepper only, no text box.</p></div>
+  <div class="callout"><span class="num misc">5</span><h3>Zoom</h3><p>Visual cell size on screen only, no effect on timing or count.</p></div>
+  <div class="callout"><span class="num misc">6</span><h3>LINK / OWN (per row)</h3><p>LINK follows the shared Beats/measure grid above. OWN gives the row its own independent measure, plus a LOOP/SYNC choice for how it relates to the shared bar.</p></div>
+  <div class="callout"><span class="num misc">7</span><h3>Row volume (orange number)</h3><p>This row's volume within the pattern (0–100), separate from the instrument's own Level.</p></div>
+  <div class="callout"><span class="num struct">8</span><h3>Slots per beat (green number, per row)</h3><p><code>rowSetUniformSlotsPerBeat()</code>. Real text box, min 1, max 8.</p></div>
+  <div class="callout"><span class="num struct">9</span><h3>One beat's worth of cells</h3><p>The visible gap between groups of cells marks a beat boundary. Total visible cells for a row = beats (global, or the row's own if OWN) &times; slots per beat for that row.</p></div>
+  <div class="callout"><span class="num struct">10</span><h3>Beat N floating box (per beat-group)</h3><p>−/+ steps that one beat-group's own slot count (still capped 1–8, stepper only). C/P copy and paste one beat's pattern onto another.</p></div>
+</div>
+
+<h2>Quick glossary</h2>
+<ul>
+  <li><strong>Bar / measure</strong> — the repeating structural unit, made of beats.</li>
+  <li><strong>Beat</strong> — one pulse of the bar's beats/measure count.</li>
+  <li><strong>Slot / step / cell</strong> — one hittable box in the grid; slots-per-beat sets how many exist inside each beat.</li>
+  <li><strong>Step resolution</strong> — the note value one existing cell represents in real time (1/8, 1/16, 1/32); playback speed, not cell count.</li>
+</ul>
+
+<footer>D20 Synth Workbench — browser/docs/step-resolution-guide.html</footer>
+
+</body>
+</html>
