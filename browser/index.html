@@ -32,7 +32,7 @@
   --seq-cell:48px;
   --seq-gap:4px;
   --seq-group-gap:8px;
-  --seq-label-w:108px;
+  --seq-label-w:140px;
   --seq-row-gap:10px;
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans:'Barlow', system-ui, -apple-system, sans-serif;
@@ -593,17 +593,19 @@ canvas{
     linear-gradient(rgba(var(--solo-yellow-rgb),0.4), rgba(var(--solo-yellow-rgb),0.16));
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), 0 0 8px rgba(var(--solo-yellow-rgb),0.4);
 }
-/* Every row gets its own Mute/Solo strip, but it's hidden by default (the
-   opposite default from .seq-group-ctrls above) -- the M/S button in the
-   header reveals it for every row at once, same toggle mechanism as Hide
-   Bars just inverted, since this one starts off rather than on. */
+/* Every row's Mute/Solo pair lives on the same line as its LINK/OWN badge
+   (inside .seq-row-flags), not on a row of its own -- but it's hidden by
+   default (the opposite default from .seq-group-ctrls above) -- the M/S
+   button in the header reveals it for every row at once, same toggle
+   mechanism as Hide Bars just inverted, since this one starts off rather
+   than on. */
 .seq-mutesolo-ctrls{
   display:none;
   align-items:center;
   gap:6px;
-  margin-top:8px;
+  margin-left:4px;
 }
-#sequencer.seq-show-mutesolo .seq-mutesolo-ctrls{display:flex;}
+#sequencer.seq-show-mutesolo .seq-mutesolo-ctrls{display:inline-flex;}
 .seq-mute-btn, .seq-solo-btn{
   --glass-rgb:154,150,145;
   width:24px; height:24px;
@@ -2411,6 +2413,17 @@ function seqSetGroupSlots(groupIndex, newSlotCount){
   renderSequencer();
 }
 
+// The "All" button on beat 1's own box: apply that one beat's current slot
+// count to every other beat in the same structure in one click, instead of
+// dialing each one individually to match. Same rebuild-in-place path as any
+// other groupSlots edit above.
+function seqSetAllGroupSlots(newSlotCount){
+  const oldGroupSlots=seq.groupSlots.slice();
+  seq.groupSlots=seq.groupSlots.map(()=> newSlotCount);
+  seqRebuildLinkedPatterns(oldGroupSlots, seq.groupSlots);
+  renderSequencer();
+}
+
 // A row's own inline controls call these instead, resizing just that row's
 // groupSlots/pattern and leaving every other row (linked or unlinked)
 // untouched.
@@ -2432,23 +2445,35 @@ function rowSetGroupSlots(row, groupIndex, newSlotCount){
   renderSequencer();
 }
 
+// Row-scoped equivalent of seqSetAllGroupSlots, for an unlinked row's own
+// inline strip.
+function rowSetAllGroupSlots(row, newSlotCount){
+  const old=row.groupSlots.slice();
+  row.groupSlots=row.groupSlots.map(()=> newSlotCount);
+  seqRebuildRowPattern(row, old, row.groupSlots);
+  renderSequencer();
+}
+
 // Copy/paste a measure (beat group) via the shared global strip: copy grabs
 // that group's slot count and every LINKED row's steps within it; paste
 // overwrites a target group, resizing it to match the copied length so the
 // pasted pattern transfers exactly. Unlinked rows aren't touched -- they
 // have their own copy/paste in their inline controls below.
-let seqClipboard=null; // {slotCount, pattern:{rowId:[bool,...]}}
+let seqClipboard=null; // {slotCount, pattern:{rowId:[bool,...]}, velocity:{rowId:[0-127,...]}}
 
 function seqCopyGroup(groupIndex){
   const bounds=seqGroupBoundaries(seq.groupSlots);
   const start=bounds[groupIndex];
   const count=seq.groupSlots[groupIndex];
   const pattern={};
+  const velocity={};
   seq.rows.forEach(row=>{
     if(rowIsUnlinked(row)) return;
     pattern[row.id]=seq.pattern[row.id].slice(start, start+count);
+    const vel=seq.velocity[row.id]||[];
+    velocity[row.id]=vel.slice(start, start+count);
   });
-  seqClipboard={slotCount:count, pattern, sourceGroup:groupIndex};
+  seqClipboard={slotCount:count, pattern, velocity, sourceGroup:groupIndex};
   renderGroupControls();
   positionGroupControls();
 }
@@ -2465,8 +2490,11 @@ function seqPasteGroup(groupIndex){
     // A row added/removed/renamed between copy and paste just falls back to
     // silence for that row instead of throwing.
     const clip=seqClipboard.pattern[row.id];
+    const velClip=seqClipboard.velocity[row.id];
+    const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
     for(let i=0;i<seqClipboard.slotCount;i++){
       seq.pattern[row.id][start+i]=!!(clip && clip[i]);
+      vel[start+i]=(velClip && velClip[i]!=null) ? velClip[i] : 100;
     }
   });
   renderSequencer();
@@ -2485,13 +2513,14 @@ document.addEventListener('pointercancel', ()=>{ seqPainting=false; });
 
 // Copy/paste a single group WITHIN one unlinked row's own chart -- used by
 // that row's inline controls, scoped to that one row only.
-let rowClipboard=null; // {slotCount, values:[bool,...]}
+let rowClipboard=null; // {slotCount, values:[bool,...], velocities:[0-127,...]}
 
 function rowCopyGroup(row, groupIndex){
   const bounds=seqGroupBoundaries(row.groupSlots);
   const start=bounds[groupIndex];
   const count=row.groupSlots[groupIndex];
-  rowClipboard={slotCount:count, values:seq.pattern[row.id].slice(start, start+count), sourceRow:row.id, sourceGroup:groupIndex};
+  const vel=seq.velocity[row.id]||[];
+  rowClipboard={slotCount:count, values:seq.pattern[row.id].slice(start, start+count), velocities:vel.slice(start, start+count), sourceRow:row.id, sourceGroup:groupIndex};
   renderSequencer();
 }
 
@@ -2502,8 +2531,10 @@ function rowPasteGroup(row, groupIndex){
   seqRebuildRowPattern(row, old, row.groupSlots);
   const bounds=seqGroupBoundaries(row.groupSlots);
   const start=bounds[groupIndex];
+  const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
   for(let i=0;i<rowClipboard.slotCount;i++){
     seq.pattern[row.id][start+i]=!!rowClipboard.values[i];
+    vel[start+i]=(rowClipboard.velocities && rowClipboard.velocities[i]!=null) ? rowClipboard.velocities[i] : 100;
   }
   renderSequencer();
 }
@@ -2675,6 +2706,43 @@ function renderSequencer(){
       modeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); rowSetMode(row, mode==='sync'?'loop':'sync'); });
       flags.appendChild(modeBtn);
     }
+    // Mute/Solo lives on this same flags line (not its own row below) --
+    // hidden by default (see the CSS) until the M/S button in the header
+    // reveals it for every row at once, same toggle mechanism as Hide Bars
+    // just inverted, since this one starts off rather than on.
+    const muteSoloCtrls=document.createElement('span');
+    muteSoloCtrls.className='seq-mutesolo-ctrls';
+    const muteBtn=document.createElement('button');
+    muteBtn.type='button';
+    muteBtn.className='seq-mute-btn'+(row.muted?' active':'');
+    muteBtn.textContent='M';
+    muteBtn.title='Mute '+voice.name+' in this pattern';
+    muteBtn.setAttribute('aria-label', 'Mute '+voice.name);
+    muteBtn.setAttribute('aria-pressed', String(!!row.muted));
+    muteBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      row.muted=!row.muted;
+      muteBtn.classList.toggle('active', row.muted);
+      muteBtn.setAttribute('aria-pressed', String(row.muted));
+      updateRowSilencedStyles();
+    });
+    const soloBtn=document.createElement('button');
+    soloBtn.type='button';
+    soloBtn.className='seq-solo-btn'+(row.solo?' active':'');
+    soloBtn.textContent='S';
+    soloBtn.title='Solo '+voice.name+' -- while any row is soloed, only soloed rows play';
+    soloBtn.setAttribute('aria-label', 'Solo '+voice.name);
+    soloBtn.setAttribute('aria-pressed', String(!!row.solo));
+    soloBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      row.solo=!row.solo;
+      soloBtn.classList.toggle('active', row.solo);
+      soloBtn.setAttribute('aria-pressed', String(row.solo));
+      updateRowSilencedStyles();
+    });
+    muteSoloCtrls.appendChild(muteBtn);
+    muteSoloCtrls.appendChild(soloBtn);
+    flags.appendChild(muteSoloCtrls);
     label.appendChild(flags);
     rowEl.appendChild(label);
 
@@ -2769,44 +2837,6 @@ function renderSequencer(){
       inlineCtrls.className='seq-group-ctrls';
       block.appendChild(inlineCtrls);
     }
-
-    // Every row gets a Mute/Solo strip -- unlike the per-beat controls
-    // above, this isn't tied to linked/unlinked -- but it stays hidden
-    // (see the CSS) until the M/S button in the header reveals it for
-    // every row at once.
-    const muteSoloCtrls=document.createElement('div');
-    muteSoloCtrls.className='seq-mutesolo-ctrls';
-    const muteBtn=document.createElement('button');
-    muteBtn.type='button';
-    muteBtn.className='seq-mute-btn'+(row.muted?' active':'');
-    muteBtn.textContent='M';
-    muteBtn.title='Mute '+voice.name+' in this pattern';
-    muteBtn.setAttribute('aria-label', 'Mute '+voice.name);
-    muteBtn.setAttribute('aria-pressed', String(!!row.muted));
-    muteBtn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      row.muted=!row.muted;
-      muteBtn.classList.toggle('active', row.muted);
-      muteBtn.setAttribute('aria-pressed', String(row.muted));
-      updateRowSilencedStyles();
-    });
-    const soloBtn=document.createElement('button');
-    soloBtn.type='button';
-    soloBtn.className='seq-solo-btn'+(row.solo?' active':'');
-    soloBtn.textContent='S';
-    soloBtn.title='Solo '+voice.name+' -- while any row is soloed, only soloed rows play';
-    soloBtn.setAttribute('aria-label', 'Solo '+voice.name);
-    soloBtn.setAttribute('aria-pressed', String(!!row.solo));
-    soloBtn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      row.solo=!row.solo;
-      soloBtn.classList.toggle('active', row.solo);
-      soloBtn.setAttribute('aria-pressed', String(row.solo));
-      updateRowSilencedStyles();
-    });
-    muteSoloCtrls.appendChild(muteBtn);
-    muteSoloCtrls.appendChild(soloBtn);
-    block.appendChild(muteSoloCtrls);
 
     body.appendChild(block);
   });
@@ -2956,6 +2986,19 @@ function buildGroupCtrlBox(g, count, opts){
 
   box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
   box.appendChild(copyBtn); box.appendChild(pasteBtn);
+
+  // "All" lives only on beat 1's own box: apply beat 1's current slot count
+  // to every beat in this structure in one click, instead of dialing each
+  // one to match by hand.
+  if(g===0){
+    const allBtn=document.createElement('button');
+    allBtn.type='button'; allBtn.className='seq-all-btn';
+    allBtn.textContent='All';
+    allBtn.title='Set every beat to this many slots ('+count+')';
+    allBtn.setAttribute('aria-label', 'Set every beat to beat 1\'s slot count');
+    allBtn.addEventListener('click', ()=> opts.setAll(count));
+    box.appendChild(allBtn);
+  }
   return box;
 }
 
@@ -2968,7 +3011,8 @@ function renderGroupControls(){
       isCopied:(idx)=> !!(seqClipboard && seqClipboard.sourceGroup===idx),
       canPaste:()=> !!seqClipboard,
       copy:(idx)=> seqCopyGroup(idx),
-      paste:(idx)=> seqPasteGroup(idx)
+      paste:(idx)=> seqPasteGroup(idx),
+      setAll:(n)=> seqSetAllGroupSlots(n)
     }));
   });
 }
@@ -2991,7 +3035,8 @@ function renderRowControls(row){
       isCopied:(idx)=> !!(rowClipboard && rowClipboard.sourceRow===row.id && rowClipboard.sourceGroup===idx),
       canPaste:()=> !!rowClipboard,
       copy:(idx)=> rowCopyGroup(row, idx),
-      paste:(idx)=> rowPasteGroup(row, idx)
+      paste:(idx)=> rowPasteGroup(row, idx),
+      setAll:(n)=> rowSetAllGroupSlots(row, n)
     }));
   });
 }
