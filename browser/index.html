@@ -561,6 +561,7 @@ canvas{
   color:var(--text);
   min-width:16px;
   text-align:center;
+  flex-shrink:0;
 }
 
 .seq-group-ctrls{
@@ -638,8 +639,13 @@ canvas{
   padding:0 5px;
   white-space:nowrap;
   box-sizing:border-box;
+  /* JS sets width to match however many cells (as little as 1) this beat
+     spans, which can be narrower than -/+/count/C/P can fit. min-width wins
+     over an inline width per CSS, so the box just grows past its cell span
+     instead of flex-shrinking its buttons into an overlapping mess. */
+  min-width:126px;
 }
-.seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px;}
+.seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px; flex-shrink:0;}
 .seq-copy-btn, .seq-paste-btn{
   width:20px; height:20px;
   padding:0;
@@ -647,6 +653,7 @@ canvas{
   line-height:1;
   border-radius:5px;
   cursor:pointer;
+  flex-shrink:0;
 }
 .seq-copy-btn{
   --glass-rgb:var(--copy-pink-rgb);
@@ -681,13 +688,6 @@ canvas{
   -webkit-backdrop-filter:none;
   background:transparent;
 }
-.seq-group-label{
-  font-size:10px;
-  font-family:var(--mono);
-  color:var(--subtext);
-  min-width:38px;
-}
-
 .seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
 .seq-row-block.seq-row-silenced{opacity:0.4;}
@@ -2869,10 +2869,13 @@ function positionGroupControls(){
 function buildGroupCtrlBox(g, count, opts){
   const box=document.createElement('div');
   box.className='seq-group-ctrl';
-
-  const label=document.createElement('span');
-  label.className='seq-group-label';
-  label.textContent='Beat '+(g+1);
+  // No visible "Beat N" label -- at low slot counts (3 or fewer cells) there
+  // isn't room for it alongside -/+/count/C/P without the buttons getting
+  // flex-shrunk into an overlapping mess. The box keeps a title/aria-label
+  // instead, and every button below already says "beat N" in its own
+  // aria-label, so nothing here loses accessibility by dropping the span.
+  box.title='Beat '+(g+1);
+  box.setAttribute('aria-label', 'Beat '+(g+1)+' controls');
 
   const dec=document.createElement('button');
   dec.type='button'; dec.className='seq-beats-btn';
@@ -2907,7 +2910,7 @@ function buildGroupCtrlBox(g, count, opts){
   pasteBtn.disabled=!opts.canPaste();
   pasteBtn.addEventListener('click', ()=> opts.paste(g));
 
-  box.appendChild(label); box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
+  box.appendChild(dec); box.appendChild(out); box.appendChild(inc);
   box.appendChild(copyBtn); box.appendChild(pasteBtn);
   return box;
 }
