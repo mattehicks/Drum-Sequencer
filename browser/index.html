@@ -2870,8 +2870,19 @@ function seqRestoreFocus(saved){
   }
 }
 
+// Pins the page's scroll position, reasserting it once more on the next
+// frame -- some scroll jumps caused by focus loss during a DOM rebuild (see
+// renderSequencer below) land after the browser's own next layout/paint
+// pass, not synchronously within the function that triggered them, so a
+// single scrollTo right after the rebuild isn't always enough to cancel it.
+function seqPinScroll(x, y){
+  window.scrollTo(x, y);
+  requestAnimationFrame(()=> window.scrollTo(x, y));
+}
+
 function renderSequencer(){
   const focusSave=seqCaptureFocus();
+  const scrollX=window.scrollX, scrollY=window.scrollY;
   const body=document.getElementById('seqRows');
   body.innerHTML='';
   seq.rows.forEach(row=>{
@@ -3098,6 +3109,18 @@ function renderSequencer(){
   updatePatternApplyTargetOptions();
   seqUpdateSelectionUI();
   seqRestoreFocus(focusSave);
+  // Rebuilding #seqRows from scratch destroys whatever element the click
+  // that triggered this render was focused on (Remove/Duplicate especially,
+  // since they're often hidden again right after -- their own selection
+  // just got cleared -- so seqRestoreFocus above has nothing visible to put
+  // focus back on). When a focused element disappears out from under a
+  // live click, the browser drops focus to <body>, and that can reset the
+  // page's scroll to the top of the document -- reported as the whole
+  // window "jumping up" whenever a structural edit fires while scrolled
+  // down to a row further down the list. Pinning the scroll position back
+  // to wherever it was before the rebuild fixes that regardless of which
+  // exact action caused the focus loss.
+  seqPinScroll(scrollX, scrollY);
 }
 
 function seqSetRowVoice(rowId, voiceId){
