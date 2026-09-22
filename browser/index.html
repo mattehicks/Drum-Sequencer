@@ -763,6 +763,32 @@ canvas{
     linear-gradient(rgba(var(--accent-rgb),0.4), rgba(var(--accent-rgb),0.16));
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--accent-rgb),0.45);
 }
+/* Sits right after the Duplicate button once a range is selected -- same
+   free-floating sibling, positioned by positionRemoveButton off of
+   Duplicate's own already-placed left/top. Mute-red so a destructive action
+   reads as clearly distinct from Duplicate's orange. */
+.seq-remove-btn{
+  position:absolute;
+  height:20px;
+  padding:0 8px;
+  font-size:10px;
+  font-weight:600;
+  line-height:1;
+  border-radius:5px;
+  cursor:pointer;
+  white-space:nowrap;
+  --glass-rgb:var(--mute-red-rgb);
+  color:var(--mute-red);
+}
+.seq-remove-btn[hidden]{display:none;}
+.seq-remove-btn:hover{
+  color:var(--mute-red);
+  border-color:rgba(var(--mute-red-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--mute-red-rgb),0.4), rgba(var(--mute-red-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--mute-red-rgb),0.45);
+}
 .seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
 .seq-row-block.seq-row-silenced{opacity:0.4;}
@@ -2600,6 +2626,75 @@ function rowDuplicateRange(row, startG, endG){
   showHint('Duplicated '+rangeLen+' beat'+(rangeLen===1?'':'s')+' on '+(voice?voice.name:'row')+'.');
 }
 
+// Remove a selected range of beats (same selection as Duplicate above, see
+// seqSelectGroup/seqRangeSel) -- splices those groupSlots entries out along
+// with every LINKED row's pattern/velocity steps that fell within them.
+// Unlinked rows aren't touched, same convention as Duplicate/copy-paste/All;
+// they have their own rowRemoveRange below for their own inline strip. The
+// only hard floor is 1 -- a strip can't be emptied down to zero groups, so a
+// selection spanning the whole strip is refused rather than silently
+// clamped. That's the one place this diverges from Duplicate's "no cap,
+// it's a deliberate bulk action" precedent: growing unboundedly is safe,
+// shrinking to nothing would leave the row with no cells to render at all.
+function seqRemoveRange(startG, endG){
+  const groupCount=seq.groupSlots.length;
+  const rangeLen=endG-startG+1;
+  if(rangeLen>=groupCount){
+    showHint("Can't remove every bar — keep at least one.");
+    return;
+  }
+  const bounds=seqGroupBoundaries(seq.groupSlots);
+  const stepStart=bounds[startG];
+  const stepEnd=bounds[endG]+seq.groupSlots[endG]; // exclusive
+
+  seq.groupSlots.splice(startG, rangeLen);
+  seq.beatsPerMeasure=seq.groupSlots.length;
+
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) return;
+    const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
+    const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+    pat.splice(stepStart, stepEnd-stepStart);
+    vel.splice(stepStart, stepEnd-stepStart);
+  });
+  SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
+
+  // Nothing meaningful to keep selected after a removal (unlike Duplicate,
+  // which follows the new copy) -- just clear it.
+  seqRangeSel=null;
+
+  renderSequencer();
+  updateSeqMeasureUI();
+  showHint('Removed '+rangeLen+' beat'+(rangeLen===1?'':'s')+'.');
+}
+
+// Row-scoped equivalent, for an unlinked row's own inline strip and its own
+// independent groupSlots/pattern/velocity.
+function rowRemoveRange(row, startG, endG){
+  const groupCount=row.groupSlots.length;
+  const rangeLen=endG-startG+1;
+  if(rangeLen>=groupCount){
+    showHint("Can't remove every bar — keep at least one.");
+    return;
+  }
+  const bounds=seqGroupBoundaries(row.groupSlots);
+  const stepStart=bounds[startG];
+  const stepEnd=bounds[endG]+row.groupSlots[endG]; // exclusive
+
+  row.groupSlots.splice(startG, rangeLen);
+
+  const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
+  const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+  pat.splice(stepStart, stepEnd-stepStart);
+  vel.splice(stepStart, stepEnd-stepStart);
+
+  seqRangeSel=null;
+
+  renderSequencer();
+  const voice=VOICES.find(v=>v.id===row.voiceId);
+  showHint('Removed '+rangeLen+' beat'+(rangeLen===1?'':'s')+' on '+(voice?voice.name:'row')+'.');
+}
+
 // Copy/paste a measure (beat group) via the shared global strip: copy grabs
 // that group's slot count and every LINKED row's steps within it; paste
 // overwrites a target group, resizing it to match the copied length so the
@@ -3116,6 +3211,29 @@ function positionDuplicateButton(wrap, lastBox, dupBtn){
   dupBtn.style.left=(boxLeft+boxWidth+gap)+'px';
 }
 
+function buildRemoveButton(onClick){
+  const btn=document.createElement('button');
+  btn.type='button'; btn.className='seq-remove-btn';
+  btn.textContent='Remove';
+  btn.title='Remove the selected beats';
+  btn.setAttribute('aria-label', 'Remove selected beats');
+  btn.hidden=true;
+  btn.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(); });
+  return btn;
+}
+
+// Floats just to the right of the Duplicate button, which positionDuplicateButton
+// has already placed by the time this runs (see seqApplySelectionToStrip) --
+// reads its left/top off that instead of recomputing from the boxes.
+function positionRemoveButton(dupBtn, removeBtn){
+  const dupLeft=parseFloat(dupBtn.style.left)||0;
+  const dupWidth=dupBtn.offsetWidth;
+  const dupTop=parseFloat(dupBtn.style.top)||0;
+  const gap=6;
+  removeBtn.style.top=dupTop+'px';
+  removeBtn.style.left=(dupLeft+dupWidth+gap)+'px';
+}
+
 // Applies the current selection's visuals (highlighted boxes + the
 // Duplicate button) to one strip. Called for the shared strip and every
 // unlinked row's own strip on every render, not just when the selection
@@ -3124,7 +3242,7 @@ function positionDuplicateButton(wrap, lastBox, dupBtn){
 // so this also re-validates the selection against the strip it actually
 // belongs to and drops it if it's gone stale (its end index no longer
 // exists in that strip).
-function seqApplySelectionToStrip(wrap, scope, groupCount, onDuplicate){
+function seqApplySelectionToStrip(wrap, scope, groupCount, onDuplicate, onRemove){
   if(!wrap) return;
   if(seqRangeSel && seqRangeSel.scope===scope && seqRangeSel.end>=groupCount){
     seqRangeSel=null;
@@ -3143,19 +3261,33 @@ function seqApplySelectionToStrip(wrap, scope, groupCount, onDuplicate){
     wrap.appendChild(dupBtn);
   }
   dupBtn.hidden=!active;
-  if(active) positionDuplicateButton(wrap, boxes[seqRangeSel.end], dupBtn);
+  let removeBtn=wrap.querySelector('.seq-remove-btn');
+  if(!removeBtn){
+    removeBtn=buildRemoveButton(()=>{
+      if(!seqRangeSel || seqRangeSel.scope!==scope) return;
+      onRemove(seqRangeSel.start, seqRangeSel.end);
+    });
+    wrap.appendChild(removeBtn);
+  }
+  removeBtn.hidden=!active;
+  if(active){
+    positionDuplicateButton(wrap, boxes[seqRangeSel.end], dupBtn);
+    positionRemoveButton(dupBtn, removeBtn);
+  }
 }
 
 function seqUpdateSelectionUI(){
   seqApplySelectionToStrip(document.getElementById('seqGroupCtrls'), 'shared', seq.groupSlots.length,
-    (s, e)=> seqDuplicateRange(s, e));
+    (s, e)=> seqDuplicateRange(s, e),
+    (s, e)=> seqRemoveRange(s, e));
   seq.rows.forEach(row=>{
     if(!rowIsUnlinked(row)) return;
     const cellsEl=document.querySelector('.step[data-row="'+row.id+'"]');
     const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
     const ctrlsEl=blockEl ? blockEl.querySelector('.seq-group-ctrls') : null;
     seqApplySelectionToStrip(ctrlsEl, row.id, row.groupSlots.length,
-      (s, e)=> rowDuplicateRange(row, s, e));
+      (s, e)=> rowDuplicateRange(row, s, e),
+      (s, e)=> rowRemoveRange(row, s, e));
   });
 }
 
