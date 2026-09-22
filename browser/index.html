@@ -4436,7 +4436,17 @@ window.addEventListener('resize', ()=>{
   seqResizeRaf=requestAnimationFrame(()=> renderSequencer());
 });
 
+// Number-key pad triggering (1-9 fires an instrument's pad, same as
+// clicking it) has been in the app since the original build. Disabled for
+// now: it has no check for whether a text field has focus, so it also
+// intercepts every "1"-"9" keystroke typed into Project Name or any other
+// input, making it impossible to type a number there. Flip this back to
+// true to restore it -- ideally after adding a focused-element check
+// (e.g. skip when document.activeElement is an <input>/<textarea>) so it
+// doesn't fight with typing again.
+const SEQ_KEY_PADS_ENABLED=false;
 window.addEventListener('keydown', (e)=>{
+  if(!SEQ_KEY_PADS_ENABLED) return;
   if(e.repeat) return;
   const voice=VOICES.find(v=>v.key===e.key);
   if(voice) firePad(voice, pads[voice.id]);
