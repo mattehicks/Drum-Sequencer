@@ -1216,6 +1216,8 @@ canvas{
     </div>
   </div>
 
+  <section class="rack" id="rack"></section>
+
   <section class="sequencer" id="sequencer">
     <div class="seq-head">
       <button id="seqPlayBtn" class="seq-play" type="button">&#9654; Play</button>
@@ -1261,11 +1263,11 @@ canvas{
 
   <section class="patterns" id="patternsSection">
     <div class="patterns-head">
-      <button type="button" class="analysis-toggle" id="patternsToggle" aria-expanded="true" aria-controls="patternsBody">
-        <span class="chevron">&#9662;</span> Text Patterns / Arrangement
+      <button type="button" class="analysis-toggle" id="patternsToggle" aria-expanded="false" aria-controls="patternsBody">
+        <span class="chevron">&#9656;</span> Text Patterns / Arrangement
       </button>
     </div>
-    <div class="patterns-body" id="patternsBody">
+    <div class="patterns-body" id="patternsBody" hidden>
       <div id="patternList"></div>
       <button type="button" class="seq-add-row patterns-add" id="addPatternBtn">+ Add Pattern</button>
 
@@ -1284,8 +1286,6 @@ canvas{
       </div>
     </div>
   </section>
-
-  <section class="rack" id="rack"></section>
 
   <footer class="notes">
     <p>Every voice below follows the same three-stage architecture used in analog drum synthesis: a <strong>source</strong> (oscillator, noise, or chaos generator), a <strong>shaping stage</strong> (filter and/or envelope), and a <strong>mixer bus</strong>. What separates a kick from a cymbal is the source and filter, not the structure. Trigger with the pads or keys 1&ndash;9. Open "Theory" on a module for the algorithm and math behind it.</p>
@@ -3998,7 +3998,7 @@ document.getElementById('patternApplyBtn').addEventListener('click', applyArrang
 
 const patternsToggle=document.getElementById('patternsToggle');
 const patternsBody=document.getElementById('patternsBody');
-let patternsExpanded=true;
+let patternsExpanded=false;
 function setPatternsExpanded(expanded){
   patternsExpanded=expanded;
   patternsBody.hidden=!expanded;
