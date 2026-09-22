@@ -654,11 +654,6 @@ canvas{
      instead of flex-shrinking its buttons into an overlapping mess. */
   min-width:126px;
 }
-/* Beat 1's box carries the extra "All" button, so it needs more floor width
-   than every other beat's box -- otherwise low slot counts (1-3 cells,
-   where the JS-measured cell span is narrower than this) flex-shrink All
-   into the -/+/count/C/P buttons instead of just growing past its span. */
-.seq-group-ctrl-first{min-width:158px;}
 .seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px; flex-shrink:0;}
 .seq-copy-btn, .seq-paste-btn{
   width:20px; height:20px;
@@ -702,12 +697,16 @@ canvas{
   -webkit-backdrop-filter:none;
   background:transparent;
 }
-/* "All" (beat 1's box only): sets every beat to beat 1's slot count. Text
-   needs more room than the single-letter C/P buttons, so it's auto-width
-   instead of the fixed 20px square -- everything else (height, radius,
-   glass hover treatment) matches the rest of the strip. Teal accent-2
-   keeps it visually distinct from copy's pink and paste's green. */
+/* "All" (sets every beat to beat 1's slot count) sits OUTSIDE beat 1's own
+   box -- a free-floating sibling in the same strip, positioned by
+   positionAllButton right next to that box rather than laid out by flex
+   inside it. Text needs more room than the single-letter C/P buttons, so
+   it's auto-width instead of the fixed 20px square -- everything else
+   (height, radius, glass hover treatment) matches the rest of the strip.
+   Teal accent-2 keeps it visually distinct from copy's pink and paste's
+   green. */
 .seq-all-btn{
+  position:absolute;
   height:20px;
   padding:0 6px;
   font-size:10px;
@@ -715,7 +714,7 @@ canvas{
   line-height:1;
   border-radius:5px;
   cursor:pointer;
-  flex-shrink:0;
+  white-space:nowrap;
   --glass-rgb:var(--accent-2-rgb);
   color:var(--accent-2);
 }
@@ -954,11 +953,19 @@ canvas{
   padding:6px 8px;
 }
 
+.rack-panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px 16px 16px;
+}
+.rack-head{margin-bottom:14px;}
 .rack{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
   gap:16px;
 }
+.rack[hidden]{display:none;}
 .voice{
   background:var(--panel);
   border:1px solid var(--border);
@@ -1216,7 +1223,14 @@ canvas{
     </div>
   </div>
 
-  <section class="rack" id="rack"></section>
+  <section class="rack-panel" id="rackSection">
+    <div class="rack-head">
+      <button type="button" class="analysis-toggle" id="rackToggle" aria-expanded="false" aria-controls="rack">
+        <span class="chevron">&#9656;</span> Instruments
+      </button>
+    </div>
+    <section class="rack" id="rack" hidden></section>
+  </section>
 
   <section class="sequencer" id="sequencer">
     <div class="seq-head">
@@ -2929,6 +2943,26 @@ function seqDeleteRow(rowId){
 // (6px), so the strip's rows line up with the cell rows above it.
 const SEQ_GROUP_CTRL_LINE_PITCH=26+6;
 
+// Floats the standalone "All" button immediately to the left of beat 1's
+// own box, vertically centered on it -- it's a sibling of the .seq-group-ctrl
+// boxes now (not nested inside beat 1's), so it needs its own left/top
+// instead of picking one up for free by being a child of that box. Beat 1's
+// box is always on the strip's first stacked line, so this only has to run
+// once box0 already has its final left/top/height.
+function positionAllButton(wrap, box0){
+  const allBtn=wrap.querySelector('.seq-all-btn');
+  if(!allBtn || !box0) return;
+  const boxLeft=parseFloat(box0.style.left)||0;
+  const boxTop=parseFloat(box0.style.top)||0;
+  const boxHeight=box0.offsetHeight||26;
+  const gap=6;
+  allBtn.style.top=(boxTop+(boxHeight-allBtn.offsetHeight)/2)+'px';
+  // Never goes negative (would slide it under the row label/vol/spb columns
+  // to the left) -- floors at 0, flush against the strip's own left edge,
+  // for the rare case beat 1's box starts very close to it.
+  allBtn.style.left=Math.max(0, boxLeft-allBtn.offsetWidth-gap)+'px';
+}
+
 function positionGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
   const firstLinkedBlock=document.querySelector('#seqRows .seq-row-block[data-linked="true"]');
@@ -2946,7 +2980,8 @@ function positionGroupControls(){
   // place it that many line-pitches down from the wrap's own top.
   const lines=seqGroupLineChunks(seq.groupSlots);
   let maxBottom=0;
-  Array.from(wrap.children).forEach((box, g)=>{
+  const boxes=Array.from(wrap.querySelectorAll('.seq-group-ctrl'));
+  boxes.forEach((box, g)=>{
     const start=bounds[g];
     const end=start+seq.groupSlots[g]-1;
     const firstCell=firstLinkedBlock.querySelector('.step[data-col="'+start+'"]');
@@ -2961,6 +2996,7 @@ function positionGroupControls(){
     box.style.top=top+'px';
     maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
+  positionAllButton(wrap, boxes[0]);
   // The strip's own height now spans as many stacked lines as the row
   // above it does -- fixed CSS height would clip every line past the first.
   wrap.style.height=(maxBottom||26)+'px';
@@ -2972,7 +3008,7 @@ function positionGroupControls(){
 // and copy/paste are passed in so the same box markup/behavior serves both.
 function buildGroupCtrlBox(g, count, opts){
   const box=document.createElement('div');
-  box.className='seq-group-ctrl'+(g===0?' seq-group-ctrl-first':'');
+  box.className='seq-group-ctrl';
   // No visible "Beat N" label -- at low slot counts (3 or fewer cells) there
   // isn't room for it alongside -/+/count/C/P without the buttons getting
   // flex-shrunk into an overlapping mess. The box keeps a title/aria-label
@@ -2980,19 +3016,6 @@ function buildGroupCtrlBox(g, count, opts){
   // aria-label, so nothing here loses accessibility by dropping the span.
   box.title='Beat '+(g+1);
   box.setAttribute('aria-label', 'Beat '+(g+1)+' controls');
-
-  // "All" lives only on beat 1's own box, at the very front of it (ahead of
-  // -/count/+): apply beat 1's current slot count to every beat in this
-  // structure in one click, instead of dialing each one to match by hand.
-  if(g===0){
-    const allBtn=document.createElement('button');
-    allBtn.type='button'; allBtn.className='seq-all-btn';
-    allBtn.textContent='All';
-    allBtn.title='Set every beat to this many slots ('+count+')';
-    allBtn.setAttribute('aria-label', 'Set every beat to beat 1\'s slot count');
-    allBtn.addEventListener('click', ()=> opts.setAll(count));
-    box.appendChild(allBtn);
-  }
 
   const dec=document.createElement('button');
   dec.type='button'; dec.className='seq-beats-btn';
@@ -3032,17 +3055,32 @@ function buildGroupCtrlBox(g, count, opts){
   return box;
 }
 
+// The "All" button (apply beat 1's slot count to every beat in this
+// structure) lives OUTSIDE beat 1's own box -- a separate element floated
+// just to its left, not one more control crammed inside its border. Built
+// once per strip and positioned by positionGroupControls/positionRowControls
+// right alongside beat 1's box, same as every .seq-group-ctrl box already is.
+function buildAllButton(count, setAll){
+  const allBtn=document.createElement('button');
+  allBtn.type='button'; allBtn.className='seq-all-btn';
+  allBtn.textContent='All';
+  allBtn.title='Set every beat to this many slots ('+count+')';
+  allBtn.setAttribute('aria-label', 'Set every beat to beat 1\'s slot count');
+  allBtn.addEventListener('click', ()=> setAll(count));
+  return allBtn;
+}
+
 function renderGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
   wrap.innerHTML='';
+  wrap.appendChild(buildAllButton(seq.groupSlots[0], (n)=> seqSetAllGroupSlots(n)));
   seq.groupSlots.forEach((count, g)=>{
     wrap.appendChild(buildGroupCtrlBox(g, count, {
       setSlots:(idx, n)=> seqSetGroupSlots(idx, n),
       isCopied:(idx)=> !!(seqClipboard && seqClipboard.sourceGroup===idx),
       canPaste:()=> !!seqClipboard,
       copy:(idx)=> seqCopyGroup(idx),
-      paste:(idx)=> seqPasteGroup(idx),
-      setAll:(n)=> seqSetAllGroupSlots(n)
+      paste:(idx)=> seqPasteGroup(idx)
     }));
   });
 }
@@ -3059,14 +3097,14 @@ function renderRowControls(row){
   const ctrlsEl=blockEl.querySelector('.seq-group-ctrls');
   if(!ctrlsEl) return;
   ctrlsEl.innerHTML='';
+  ctrlsEl.appendChild(buildAllButton(row.groupSlots[0], (n)=> rowSetAllGroupSlots(row, n)));
   row.groupSlots.forEach((count, g)=>{
     ctrlsEl.appendChild(buildGroupCtrlBox(g, count, {
       setSlots:(idx, n)=> rowSetGroupSlots(row, idx, n),
       isCopied:(idx)=> !!(rowClipboard && rowClipboard.sourceRow===row.id && rowClipboard.sourceGroup===idx),
       canPaste:()=> !!rowClipboard,
       copy:(idx)=> rowCopyGroup(row, idx),
-      paste:(idx)=> rowPasteGroup(row, idx),
-      setAll:(n)=> rowSetAllGroupSlots(row, n)
+      paste:(idx)=> rowPasteGroup(row, idx)
     }));
   });
 }
@@ -3085,7 +3123,8 @@ function positionRowControls(row){
   // subtraction -- that would go negative and float the boxes upward.
   const lines=seqGroupLineChunks(row.groupSlots);
   let maxBottom=0;
-  Array.from(ctrlsEl.children).forEach((box, g)=>{
+  const boxes=Array.from(ctrlsEl.querySelectorAll('.seq-group-ctrl'));
+  boxes.forEach((box, g)=>{
     const start=bounds[g];
     const end=start+row.groupSlots[g]-1;
     // Scoped to the whole block (not a single .seq-cells line) so this still
@@ -3102,6 +3141,7 @@ function positionRowControls(row){
     box.style.top=top+'px';
     maxBottom=Math.max(maxBottom, top+box.offsetHeight);
   });
+  positionAllButton(ctrlsEl, boxes[0]);
   ctrlsEl.style.height=(maxBottom||26)+'px';
 }
 
@@ -4172,6 +4212,18 @@ function setAnalysisExpanded(expanded){
 analysisToggle.addEventListener('click', ()=> setAnalysisExpanded(!analysisExpanded));
 setAnalysisExpanded(false); // minimized by default
 
+const rackToggle=document.getElementById('rackToggle');
+const rackBody=document.getElementById('rack');
+let rackExpanded=false;
+function setRackExpanded(expanded){
+  rackExpanded=expanded;
+  rackBody.hidden=!expanded;
+  rackToggle.setAttribute('aria-expanded', String(expanded));
+  rackToggle.querySelector('.chevron').innerHTML=expanded ? '&#9662;' : '&#9656;';
+}
+rackToggle.addEventListener('click', ()=> setRackExpanded(!rackExpanded));
+setRackExpanded(false); // minimized by default
+
 const engineBtn=document.getElementById('engineBtn');
 const engineStatus=document.getElementById('engineStatus');
 const masterVolInput=document.getElementById('masterVol');
@@ -4246,6 +4298,7 @@ function collectProjectState(){
   if(seqMuteSoloShown) uiState.muteSoloShown=true;
   if(analysisExpanded) uiState.analysisExpanded=true;
   if(!patternsExpanded) uiState.patternsExpanded=false;
+  if(rackExpanded) uiState.rackExpanded=true;
 
   return {
     format:'d20-synth-project',
@@ -4519,6 +4572,7 @@ function applyProjectState(data){
   seqApplyMuteSoloVisibility();
   setAnalysisExpanded(!!ui.analysisExpanded);
   setPatternsExpanded(ui.patternsExpanded!==false);
+  setRackExpanded(!!ui.rackExpanded);
 
   document.getElementById('projectNameInput').value=data.name || '';
 
