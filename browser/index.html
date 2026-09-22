@@ -3169,22 +3169,42 @@ function positionAllButton(wrap, box0){
 // beat that was clicked WITHOUT shift; shift-click extends start/end to
 // span from the anchor to the newly-clicked beat, so repeated shift-clicks
 // can grow the range in either direction, same as a spreadsheet's range
-// select. Clicking the anchor beat again (no shift, already the sole
-// selection) clears the selection -- the only way to dismiss it besides
-// duplicating or letting an unrelated structural edit invalidate it.
+// select. Clicking any box already inside the current selection (no shift)
+// clears the whole thing in one click; Escape does the same without having
+// to hit a box at all -- both matter once Remove/Duplicate are on the
+// table, since a bulk edit or a refused Remove (whole-strip selection) can
+// otherwise leave a highlighted range with no obviously-clickable way out.
 let seqRangeSel=null; // {scope:'shared'|rowId, anchor, start, end}
 
 function seqSelectGroup(scope, g, shiftKey){
   if(shiftKey && seqRangeSel && seqRangeSel.scope===scope){
     seqRangeSel.start=Math.min(seqRangeSel.anchor, g);
     seqRangeSel.end=Math.max(seqRangeSel.anchor, g);
-  }else if(seqRangeSel && seqRangeSel.scope===scope && seqRangeSel.anchor===g && seqRangeSel.start===g && seqRangeSel.end===g){
+  }else if(!shiftKey && seqRangeSel && seqRangeSel.scope===scope && g>=seqRangeSel.start && g<=seqRangeSel.end){
+    // A plain click on any box already inside the current selection clears
+    // the whole thing in one click -- not just the single-box case (click
+    // the sole selected box again). Without this, clicking a box in the
+    // middle of a multi-box range just re-anchored a new single-box
+    // selection there, so escaping a range took two clicks (narrow, then
+    // clear) and looked stuck after the first.
     seqRangeSel=null;
   }else{
     seqRangeSel={scope, anchor:g, start:g, end:g};
   }
   seqUpdateSelectionUI();
 }
+
+// Second way out, for when Remove refuses a whole-strip selection (see
+// seqRemoveRange/rowRemoveRange) and there's no unselected box left to
+// click: Escape always clears whatever selection is active, in either
+// scope. Same pattern as the existing Escape handlers for the voice picker
+// and context menu below.
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape' && seqRangeSel){
+    seqRangeSel=null;
+    seqUpdateSelectionUI();
+  }
+});
 
 function buildDuplicateButton(onClick){
   const btn=document.createElement('button');
