@@ -1215,6 +1215,7 @@ canvas{
       </label>
     </div>
     <div class="file-ctrl">
+      <button id="newProjectBtn" class="file-btn" type="button" title="Clear the sequencer, instrument tweaks, and text patterns back to a blank starter project">New Project</button>
       <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
       <button id="loadProjectBtn" class="file-btn" type="button">Load Project</button>
       <input type="file" id="loadProjectInput" accept="application/json,.json" hidden>
@@ -4411,6 +4412,101 @@ async function saveProject(){
 }
 
 document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
+
+/* ---------- new project ---------- */
+// Flushes every editable piece of state back to the same blank starter kit
+// a first-ever page load would show, EXCEPT it goes silent rather than
+// reproducing the one-time demo groove the seq object literal boots with --
+// "new project" means an empty canvas, not "replay the tutorial pattern".
+// Doesn't reuse applyProjectState({}) for this: that function intentionally
+// falls back to whatever's CURRENTLY loaded for any field a save omitted
+// (rows, voice params, text patterns all do this), which is exactly right
+// for opening an old file but wrong here -- this needs every one of those
+// to go back to its hard default instead, not just the fields that already
+// have an explicit fallback constant.
+function resetToNewProject(){
+  if(seq.playing) seqStop();
+
+  // Voices: drop every clone, restore each stock voice's live params back
+  // to its own definition defaults. Nothing anywhere ever writes into
+  // voice.params[i].value except this file's own literal (param sliders
+  // write to state.voices instead -- see buildVoiceCard), so it's always
+  // still the untouched original default to rebuild state.voices from.
+  const stockVoices=VOICES.filter(v=>!v.isClone);
+  VOICES.length=0;
+  VOICES.push(...stockVoices);
+  for(const k in state.voices) delete state.voices[k];
+  stockVoices.forEach(voice=>{
+    const initial={};
+    voice.params.forEach(p=>{ initial[p.id]=p.value; });
+    state.voices[voice.id]=initial;
+  });
+  for(const k in pads) delete pads[k];
+  renderVoices();
+
+  // Sequencer: the standard 5-row starter kit, default tempo/structure,
+  // completely silent pattern.
+  seq.bpm=SEQ_DEFAULT_BPM;
+  seq.stepDivision=SEQ_DEFAULT_STEP_DIVISION;
+  seq.beatsPerMeasure=SEQ_DEFAULT_BEATS_PER_MEASURE;
+  seq.groupSlots=SEQ_DEFAULT_GROUP_SLOTS.slice();
+  seq.rows=[
+    {id:'row0', voiceId:'kick'},
+    {id:'row1', voiceId:'snare'},
+    {id:'row2', voiceId:'hihat'},
+    {id:'row3', voiceId:'clap'},
+    {id:'row4', voiceId:'tom'}
+  ];
+  SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
+  seq.pattern={};
+  seq.velocity={};
+  seq.rows.forEach(r=>{
+    seq.pattern[r.id]=new Array(SEQ_STEPS).fill(false);
+    seq.velocity[r.id]=new Array(SEQ_STEPS).fill(100);
+  });
+  seqSyncRuntime={};
+  seqRowHighlight={};
+  seqClipboard=null;
+  rowClipboard=null;
+  seqMasterStep=0;
+  seqRowUid=5; // 0-4 are the starter rows above; new rows continue from here
+
+  seqTempoInput.value=seq.bpm;
+  seqTempoOut.textContent=seq.bpm+' BPM';
+  seqStepResInput.value=String(seq.stepDivision);
+  renderSequencer();
+  updateSeqMeasureUI();
+
+  // Text Patterns / Arrangement: cleared, not left as whatever the previous
+  // project had built up.
+  patternLib.patterns=[];
+  patternLib.arrangement=[];
+  patternUid=0;
+  renderPatternsSection();
+
+  const masterVolume=SEQ_DEFAULT_MASTER_VOLUME;
+  masterVolInput.value=masterVolume;
+  masterVolVal.textContent=Math.round(masterVolume*100);
+  if(master && ctx) master.gain.setTargetAtTime(masterVolume, ctx.currentTime, 0.01);
+
+  // Same fresh-view defaults applyProjectState falls back to for a file
+  // with no uiState at all.
+  seqZoom=1; seqApplyZoom();
+  seqBarsHidden=false; seqApplyBarsVisibility();
+  seqMuteSoloShown=false; seqApplyMuteSoloVisibility();
+  setAnalysisExpanded(false);
+  setPatternsExpanded(false);
+  setRackExpanded(false);
+
+  document.getElementById('projectNameInput').value='';
+
+  showHint('New project started.');
+}
+
+document.getElementById('newProjectBtn').addEventListener('click', ()=>{
+  if(!confirm('Start a new project? This clears the sequencer, every instrument\'s tweaked parameters, and Text Patterns / Arrangement. This can\'t be undone.')) return;
+  resetToNewProject();
+});
 
 /* ---------- load project ---------- */
 // Rebuilds voices, sequencer and master volume from a file saved by
