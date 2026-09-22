@@ -653,6 +653,17 @@ canvas{
      over an inline width per CSS, so the box just grows past its cell span
      instead of flex-shrinking its buttons into an overlapping mess. */
   min-width:126px;
+  cursor:pointer; /* the box itself (not just its buttons) is clickable -- selects this beat for Duplicate */
+  transition:border-color 100ms, box-shadow 100ms, background 100ms;
+}
+/* Selected for Duplicate -- click a box (shift-click to extend) to mark a
+   range, distinct from copy's pink-active state on the C button beside it. */
+.seq-group-ctrl.selected{
+  border-color:rgba(var(--accent-rgb),0.85);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-rgb),0.24), rgba(var(--accent-rgb),0.09));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), 0 0 10px rgba(var(--accent-rgb),0.4);
 }
 .seq-group-ctrl .seq-beats-btn{width:20px; height:20px; font-size:13px; flex-shrink:0;}
 .seq-copy-btn, .seq-paste-btn{
@@ -725,6 +736,32 @@ canvas{
     linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
     linear-gradient(rgba(var(--accent-2-rgb),0.4), rgba(var(--accent-2-rgb),0.16));
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--accent-2-rgb),0.45);
+}
+/* Appears once a Duplicate range is selected (see seqRangeSel), floating
+   just to the right of the last selected box -- same free-floating sibling
+   pattern as .seq-all-btn, positioned by positionDuplicateButton. Orange
+   accent matches the selection highlight on the boxes themselves. */
+.seq-dup-btn{
+  position:absolute;
+  height:20px;
+  padding:0 8px;
+  font-size:10px;
+  font-weight:600;
+  line-height:1;
+  border-radius:5px;
+  cursor:pointer;
+  white-space:nowrap;
+  --glass-rgb:var(--accent-rgb);
+  color:var(--accent);
+}
+.seq-dup-btn[hidden]{display:none;}
+.seq-dup-btn:hover{
+  color:var(--accent);
+  border-color:rgba(var(--accent-rgb),0.8);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 65%),
+    linear-gradient(rgba(var(--accent-rgb),0.4), rgba(var(--accent-rgb),0.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 10px rgba(0,0,0,0.2), 0 0 12px rgba(var(--accent-rgb),0.45);
 }
 .seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
@@ -2499,6 +2536,70 @@ function rowSetAllGroupSlots(row, newSlotCount){
   renderSequencer();
 }
 
+// Duplicate a selected range of beats (see seqSelectGroup/seqRangeSel
+// above): clones that span's own groupSlots entries and every LINKED row's
+// pattern/velocity steps within it, and splices the copy in immediately
+// after the selection -- a literal insert, unlike seqSetGroupSlots/
+// seqRebuildLinkedPatterns's "resize in place, keep whatever hits still
+// fit" rebuild. Unlinked rows aren't touched here, same convention as
+// every other shared-strip edit (copy/paste, All) -- they keep their own
+// independent structure until re-linked or edited via their own inline
+// strip's rowDuplicateRange below. No cap on how far beatsPerMeasure can
+// grow from this, same precedent as an Arrangement applied from Text
+// Patterns -- it's a deliberate bulk action, not the small +/- stepper
+// that IS capped (SEQ_BEATS_MAX) against accidental drift.
+function seqDuplicateRange(startG, endG){
+  const bounds=seqGroupBoundaries(seq.groupSlots);
+  const stepStart=bounds[startG];
+  const stepEnd=bounds[endG]+seq.groupSlots[endG]; // exclusive
+  const groupSlice=seq.groupSlots.slice(startG, endG+1);
+  const rangeLen=endG-startG+1;
+
+  seq.groupSlots.splice(endG+1, 0, ...groupSlice);
+  seq.beatsPerMeasure=seq.groupSlots.length;
+
+  seq.rows.forEach(row=>{
+    if(rowIsUnlinked(row)) return;
+    const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
+    const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+    pat.splice(stepEnd, 0, ...pat.slice(stepStart, stepEnd));
+    vel.splice(stepEnd, 0, ...vel.slice(stepStart, stepEnd));
+  });
+  SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
+
+  // Selection follows the newly-inserted copy, so hitting Duplicate again
+  // keeps growing the sequence from wherever the last copy landed -- e.g.
+  // select beats 1-4, Duplicate, Duplicate again: 4 bars -> 8 -> 12.
+  seqRangeSel={scope:'shared', anchor:endG+1, start:endG+1, end:endG+rangeLen};
+
+  renderSequencer();
+  updateSeqMeasureUI();
+  showHint('Duplicated '+rangeLen+' beat'+(rangeLen===1?'':'s')+'.');
+}
+
+// Row-scoped equivalent, for an unlinked row's own inline strip and its own
+// independent groupSlots/pattern/velocity.
+function rowDuplicateRange(row, startG, endG){
+  const bounds=seqGroupBoundaries(row.groupSlots);
+  const stepStart=bounds[startG];
+  const stepEnd=bounds[endG]+row.groupSlots[endG]; // exclusive
+  const groupSlice=row.groupSlots.slice(startG, endG+1);
+  const rangeLen=endG-startG+1;
+
+  row.groupSlots.splice(endG+1, 0, ...groupSlice);
+
+  const pat=seq.pattern[row.id]||(seq.pattern[row.id]=[]);
+  const vel=seq.velocity[row.id]||(seq.velocity[row.id]=[]);
+  pat.splice(stepEnd, 0, ...pat.slice(stepStart, stepEnd));
+  vel.splice(stepEnd, 0, ...vel.slice(stepStart, stepEnd));
+
+  seqRangeSel={scope:row.id, anchor:endG+1, start:endG+1, end:endG+rangeLen};
+
+  renderSequencer();
+  const voice=VOICES.find(v=>v.id===row.voiceId);
+  showHint('Duplicated '+rangeLen+' beat'+(rangeLen===1?'':'s')+' on '+(voice?voice.name:'row')+'.');
+}
+
 // Copy/paste a measure (beat group) via the shared global strip: copy grabs
 // that group's slot count and every LINKED row's steps within it; paste
 // overwrites a target group, resizing it to match the copied length so the
@@ -2900,6 +3001,7 @@ function renderSequencer(){
   });
   applyPhraseDividers();
   updatePatternApplyTargetOptions();
+  seqUpdateSelectionUI();
   seqRestoreFocus(focusSave);
 }
 
@@ -2964,6 +3066,99 @@ function positionAllButton(wrap, box0){
   allBtn.style.left=Math.max(0, boxLeft-allBtn.offsetWidth-gap)+'px';
 }
 
+// ---- selecting a range of beats to duplicate ----
+// One selection at a time, scoped to either 'shared' (the global strip) or
+// a specific row's id (that row's own inline strip) -- selecting in one
+// strip silently drops whatever was selected in another, so there's never
+// ambiguity about which strip a Duplicate click applies to. anchor is the
+// beat that was clicked WITHOUT shift; shift-click extends start/end to
+// span from the anchor to the newly-clicked beat, so repeated shift-clicks
+// can grow the range in either direction, same as a spreadsheet's range
+// select. Clicking the anchor beat again (no shift, already the sole
+// selection) clears the selection -- the only way to dismiss it besides
+// duplicating or letting an unrelated structural edit invalidate it.
+let seqRangeSel=null; // {scope:'shared'|rowId, anchor, start, end}
+
+function seqSelectGroup(scope, g, shiftKey){
+  if(shiftKey && seqRangeSel && seqRangeSel.scope===scope){
+    seqRangeSel.start=Math.min(seqRangeSel.anchor, g);
+    seqRangeSel.end=Math.max(seqRangeSel.anchor, g);
+  }else if(seqRangeSel && seqRangeSel.scope===scope && seqRangeSel.anchor===g && seqRangeSel.start===g && seqRangeSel.end===g){
+    seqRangeSel=null;
+  }else{
+    seqRangeSel={scope, anchor:g, start:g, end:g};
+  }
+  seqUpdateSelectionUI();
+}
+
+function buildDuplicateButton(onClick){
+  const btn=document.createElement('button');
+  btn.type='button'; btn.className='seq-dup-btn';
+  btn.textContent='Duplicate';
+  btn.title='Duplicate the selected beats and insert the copy right after them';
+  btn.setAttribute('aria-label', 'Duplicate selected beats');
+  btn.hidden=true;
+  btn.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(); });
+  return btn;
+}
+
+// Floats just to the right of the LAST selected box, mirroring how the All
+// button floats to the left of the first one -- same reasoning, it's a
+// sibling now rather than laid out by flex inside anything.
+function positionDuplicateButton(wrap, lastBox, dupBtn){
+  if(!lastBox) return;
+  const boxLeft=parseFloat(lastBox.style.left)||0;
+  const boxWidth=parseFloat(lastBox.style.width)||lastBox.offsetWidth;
+  const boxTop=parseFloat(lastBox.style.top)||0;
+  const boxHeight=lastBox.offsetHeight||26;
+  const gap=6;
+  dupBtn.style.top=(boxTop+(boxHeight-dupBtn.offsetHeight)/2)+'px';
+  dupBtn.style.left=(boxLeft+boxWidth+gap)+'px';
+}
+
+// Applies the current selection's visuals (highlighted boxes + the
+// Duplicate button) to one strip. Called for the shared strip and every
+// unlinked row's own strip on every render, not just when the selection
+// itself changes -- a structural edit anywhere (+/-, copy/paste, All) can
+// change a strip's box count/positions out from under a stale selection,
+// so this also re-validates the selection against the strip it actually
+// belongs to and drops it if it's gone stale (its end index no longer
+// exists in that strip).
+function seqApplySelectionToStrip(wrap, scope, groupCount, onDuplicate){
+  if(!wrap) return;
+  if(seqRangeSel && seqRangeSel.scope===scope && seqRangeSel.end>=groupCount){
+    seqRangeSel=null;
+  }
+  const boxes=Array.from(wrap.querySelectorAll('.seq-group-ctrl'));
+  const active=!!(seqRangeSel && seqRangeSel.scope===scope);
+  boxes.forEach((box, g)=>{
+    box.classList.toggle('selected', active && g>=seqRangeSel.start && g<=seqRangeSel.end);
+  });
+  let dupBtn=wrap.querySelector('.seq-dup-btn');
+  if(!dupBtn){
+    dupBtn=buildDuplicateButton(()=>{
+      if(!seqRangeSel || seqRangeSel.scope!==scope) return;
+      onDuplicate(seqRangeSel.start, seqRangeSel.end);
+    });
+    wrap.appendChild(dupBtn);
+  }
+  dupBtn.hidden=!active;
+  if(active) positionDuplicateButton(wrap, boxes[seqRangeSel.end], dupBtn);
+}
+
+function seqUpdateSelectionUI(){
+  seqApplySelectionToStrip(document.getElementById('seqGroupCtrls'), 'shared', seq.groupSlots.length,
+    (s, e)=> seqDuplicateRange(s, e));
+  seq.rows.forEach(row=>{
+    if(!rowIsUnlinked(row)) return;
+    const cellsEl=document.querySelector('.step[data-row="'+row.id+'"]');
+    const blockEl=cellsEl ? cellsEl.closest('.seq-row-block') : null;
+    const ctrlsEl=blockEl ? blockEl.querySelector('.seq-group-ctrls') : null;
+    seqApplySelectionToStrip(ctrlsEl, row.id, row.groupSlots.length,
+      (s, e)=> rowDuplicateRange(row, s, e));
+  });
+}
+
 function positionGroupControls(){
   const wrap=document.getElementById('seqGroupCtrls');
   const firstLinkedBlock=document.querySelector('#seqRows .seq-row-block[data-linked="true"]');
@@ -3015,8 +3210,14 @@ function buildGroupCtrlBox(g, count, opts){
   // flex-shrunk into an overlapping mess. The box keeps a title/aria-label
   // instead, and every button below already says "beat N" in its own
   // aria-label, so nothing here loses accessibility by dropping the span.
-  box.title='Beat '+(g+1);
+  box.title='Beat '+(g+1)+' -- click to select, shift-click to extend the selection, for Duplicate';
   box.setAttribute('aria-label', 'Beat '+(g+1)+' controls');
+  // Click-to-select for Duplicate: anywhere on the box that isn't one of
+  // its own buttons (-, +, C, P, which each already own their click).
+  box.addEventListener('click', (e)=>{
+    if(e.target.closest('button')) return;
+    opts.onSelect(g, e.shiftKey);
+  });
 
   const dec=document.createElement('button');
   dec.type='button'; dec.className='seq-beats-btn';
@@ -3081,7 +3282,8 @@ function renderGroupControls(){
       isCopied:(idx)=> !!(seqClipboard && seqClipboard.sourceGroup===idx),
       canPaste:()=> !!seqClipboard,
       copy:(idx)=> seqCopyGroup(idx),
-      paste:(idx)=> seqPasteGroup(idx)
+      paste:(idx)=> seqPasteGroup(idx),
+      onSelect:(idx, shiftKey)=> seqSelectGroup('shared', idx, shiftKey)
     }));
   });
 }
@@ -3105,7 +3307,8 @@ function renderRowControls(row){
       isCopied:(idx)=> !!(rowClipboard && rowClipboard.sourceRow===row.id && rowClipboard.sourceGroup===idx),
       canPaste:()=> !!rowClipboard,
       copy:(idx)=> rowCopyGroup(row, idx),
-      paste:(idx)=> rowPasteGroup(row, idx)
+      paste:(idx)=> rowPasteGroup(row, idx),
+      onSelect:(idx, shiftKey)=> seqSelectGroup(row.id, idx, shiftKey)
     }));
   });
 }
