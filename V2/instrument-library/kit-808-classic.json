@@ -1,0 +1,202 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "808 Classic",
+  "description": "Boomy analog-style kit: long sine kick, snappy snare, classic cowbell, closed + open hats.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "808 Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.95,
+        "startFreq": 80,
+        "endFreq": 45,
+        "pitchDecay": 0.03,
+        "ampDecay": 0.7,
+        "click": 0.05,
+        "drive": 0.1
+      }
+    },
+    {
+      "id": "snare",
+      "name": "808 Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.88,
+        "tone1": 180,
+        "tone2": 330,
+        "toneDecay": 0.1,
+        "noiseFreq": 1800,
+        "noiseQ": 1.0,
+        "noiseDecay": 0.15
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Closed Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "fundamental": 320,
+        "hpFreq": 7000,
+        "decay": 0.05
+      }
+    },
+    {
+      "id": "hihat-open",
+      "name": "Open Hat",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "hihat",
+      "params": {
+        "level": 0.7,
+        "fundamental": 320,
+        "hpFreq": 7000,
+        "decay": 0.5
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Crash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "length": 2.0,
+        "brightness": 800,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "clap",
+      "name": "808 Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "centerFreq": 1200,
+        "bursts": 3,
+        "spacing": 0.012,
+        "tailLength": 0.3,
+        "tailDecay": 3,
+        "tailMix": 0.6
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "808 Cowbell",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "freq1": 587,
+        "ratio": 1.48,
+        "q": 6,
+        "decay": 0.35
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Mid Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "startFreq": 220,
+        "endFreq": 90,
+        "pitchDecay": 0.04,
+        "decay": 0.4,
+        "noiseAmt": 0.05
+      }
+    },
+    {
+      "id": "tom-low",
+      "name": "Low Tom",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "tom",
+      "params": {
+        "level": 0.85,
+        "startFreq": 170,
+        "endFreq": 70,
+        "pitchDecay": 0.04,
+        "decay": 0.45,
+        "noiseAmt": 0.05
+      }
+    },
+    {
+      "id": "tom-hi",
+      "name": "Hi Tom",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "tom",
+      "params": {
+        "level": 0.85,
+        "startFreq": 320,
+        "endFreq": 140,
+        "pitchDecay": 0.04,
+        "decay": 0.35,
+        "noiseAmt": 0.05
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Perc Pluck",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "frequency": 110,
+        "damping": 0.98
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Maraca",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "centerFreq": 3200,
+        "q": 2.0,
+        "decay": 0.08,
+        "chaosR": 3.97
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

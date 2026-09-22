@@ -1,0 +1,159 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Industrial",
+  "description": "Heavy drive kick with big sweep, beating detuned snare, trashy low hats, max-chaos noise perc.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Slam Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.95,
+        "startFreq": 200,
+        "endFreq": 40,
+        "pitchDecay": 0.06,
+        "ampDecay": 0.5,
+        "click": 0.7,
+        "drive": 0.9
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Grind Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "tone1": 160,
+        "tone2": 210,
+        "toneDecay": 0.2,
+        "noiseFreq": 3400,
+        "noiseQ": 2.5,
+        "noiseDecay": 0.45
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Trash Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "fundamental": 260,
+        "hpFreq": 4000,
+        "decay": 0.2
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Grind Wash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "length": 2.8,
+        "brightness": 3000,
+        "pitch": 0.75
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Machine Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "centerFreq": 1000,
+        "bursts": 5,
+        "spacing": 0.03,
+        "tailLength": 0.5,
+        "tailDecay": 1.5,
+        "tailMix": 0.8
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Clang",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "freq1": 450,
+        "ratio": 1.9,
+        "q": 13,
+        "decay": 0.8
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Drop Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 400,
+        "endFreq": 65,
+        "pitchDecay": 0.08,
+        "decay": 0.6,
+        "noiseAmt": 0.5
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Wire",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "frequency": 98,
+        "damping": 0.985
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Static Hit",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "centerFreq": 900,
+        "q": 5.0,
+        "decay": 0.4,
+        "chaosR": 4.0
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

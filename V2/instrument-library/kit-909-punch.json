@@ -1,0 +1,172 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "909 Punch",
+  "description": "House/techno kit: clicky driven kick, cutting snare, bright hats, four-burst clap.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "909 Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.95,
+        "startFreq": 160,
+        "endFreq": 48,
+        "pitchDecay": 0.05,
+        "ampDecay": 0.45,
+        "click": 0.5,
+        "drive": 0.35
+      }
+    },
+    {
+      "id": "snare",
+      "name": "909 Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "tone1": 200,
+        "tone2": 340,
+        "toneDecay": 0.08,
+        "noiseFreq": 2600,
+        "noiseQ": 0.8,
+        "noiseDecay": 0.22
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Closed Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "fundamental": 340,
+        "hpFreq": 8000,
+        "decay": 0.04
+      }
+    },
+    {
+      "id": "hihat-open",
+      "name": "Open Hat",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "hihat",
+      "params": {
+        "level": 0.7,
+        "fundamental": 340,
+        "hpFreq": 8000,
+        "decay": 0.35
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Crash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "length": 1.6,
+        "brightness": 1500,
+        "pitch": 1.15
+      }
+    },
+    {
+      "id": "clap",
+      "name": "909 Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.88,
+        "centerFreq": 1500,
+        "bursts": 4,
+        "spacing": 0.01,
+        "tailLength": 0.3,
+        "tailDecay": 3.5,
+        "tailMix": 0.55
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Bell",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "freq1": 700,
+        "ratio": 1.5,
+        "q": 8,
+        "decay": 0.2
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "startFreq": 260,
+        "endFreq": 105,
+        "pitchDecay": 0.05,
+        "decay": 0.28,
+        "noiseAmt": 0.3
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Pluck",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "frequency": 220,
+        "damping": 0.99
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Shaker",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.6,
+        "centerFreq": 1600,
+        "q": 1.2,
+        "decay": 0.12,
+        "chaosR": 3.99
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Acoustic Room",
+  "description": "Natural-leaning kit: short punchy kick, buzzy snare, three toms, long dark crash.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Room Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 95,
+        "endFreq": 52,
+        "pitchDecay": 0.04,
+        "ampDecay": 0.28,
+        "click": 0.55,
+        "drive": 0.08
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Wood Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.88,
+        "tone1": 185,
+        "tone2": 315,
+        "toneDecay": 0.14,
+        "noiseFreq": 2400,
+        "noiseQ": 0.9,
+        "noiseDecay": 0.3
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Closed Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "fundamental": 300,
+        "hpFreq": 5500,
+        "decay": 0.12
+      }
+    },
+    {
+      "id": "hihat-open",
+      "name": "Open Hat",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "hihat",
+      "params": {
+        "level": 0.65,
+        "fundamental": 300,
+        "hpFreq": 5500,
+        "decay": 0.8
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Dark Crash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "length": 3.0,
+        "brightness": 900,
+        "pitch": 0.95
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Slap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "centerFreq": 1400,
+        "bursts": 2,
+        "spacing": 0.02,
+        "tailLength": 0.4,
+        "tailDecay": 4,
+        "tailMix": 0.4
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Woodblock",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "freq1": 540,
+        "ratio": 1.4,
+        "q": 4,
+        "decay": 0.5
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Mid Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "startFreq": 250,
+        "endFreq": 115,
+        "pitchDecay": 0.05,
+        "decay": 0.45,
+        "noiseAmt": 0.35
+      }
+    },
+    {
+      "id": "tom-hi",
+      "name": "Hi Tom",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "tom",
+      "params": {
+        "level": 0.85,
+        "startFreq": 330,
+        "endFreq": 160,
+        "pitchDecay": 0.05,
+        "decay": 0.4,
+        "noiseAmt": 0.35
+      }
+    },
+    {
+      "id": "tom-low",
+      "name": "Floor Tom",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "tom",
+      "params": {
+        "level": 0.85,
+        "startFreq": 180,
+        "endFreq": 80,
+        "pitchDecay": 0.05,
+        "decay": 0.55,
+        "noiseAmt": 0.35
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Muted String",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "frequency": 196,
+        "damping": 0.993
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Brush",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.55,
+        "centerFreq": 1000,
+        "q": 0.8,
+        "decay": 0.25,
+        "chaosR": 3.9
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

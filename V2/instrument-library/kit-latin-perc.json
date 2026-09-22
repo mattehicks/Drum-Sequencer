@@ -1,0 +1,188 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Latin Percussion",
+  "description": "Surdo kick, timbale snare, shaker hat, two cowbells, conga toms, cabasa on chaos.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Surdo",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 110,
+        "endFreq": 60,
+        "pitchDecay": 0.03,
+        "ampDecay": 0.5,
+        "click": 0.2,
+        "drive": 0.1
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Timbale",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "tone1": 280,
+        "tone2": 420,
+        "toneDecay": 0.12,
+        "noiseFreq": 3000,
+        "noiseQ": 1.2,
+        "noiseDecay": 0.12
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Shaker",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "fundamental": 450,
+        "hpFreq": 7500,
+        "decay": 0.06
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Ride Wash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.6,
+        "length": 2.4,
+        "brightness": 1800,
+        "pitch": 1.2
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Palmas",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "centerFreq": 1600,
+        "bursts": 2,
+        "spacing": 0.035,
+        "tailLength": 0.2,
+        "tailDecay": 4,
+        "tailMix": 0.3
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Campana Hi",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "freq1": 620,
+        "ratio": 1.35,
+        "q": 7,
+        "decay": 0.3
+      }
+    },
+    {
+      "id": "cowbell-low",
+      "name": "Campana Lo",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "cowbell",
+      "params": {
+        "level": 0.8,
+        "freq1": 480,
+        "ratio": 1.35,
+        "q": 7,
+        "decay": 0.35
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Conga Hi",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "startFreq": 380,
+        "endFreq": 190,
+        "pitchDecay": 0.02,
+        "decay": 0.25,
+        "noiseAmt": 0.25
+      }
+    },
+    {
+      "id": "tom-low",
+      "name": "Conga Lo",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "tom",
+      "params": {
+        "level": 0.85,
+        "startFreq": 240,
+        "endFreq": 120,
+        "pitchDecay": 0.02,
+        "decay": 0.3,
+        "noiseAmt": 0.25
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Cuatro Pluck",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "frequency": 330,
+        "damping": 0.99
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Cabasa",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.6,
+        "centerFreq": 3500,
+        "q": 2.5,
+        "decay": 0.07,
+        "chaosR": 3.95
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

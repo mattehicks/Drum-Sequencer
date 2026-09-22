@@ -1,0 +1,159 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Minimal Glitch",
+  "description": "Tiny dry hits: thump kick, rim snare, tick hats, pinged cowbell, blip tom, everything short.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Thump",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "startFreq": 60,
+        "endFreq": 45,
+        "pitchDecay": 0.02,
+        "ampDecay": 0.12,
+        "click": 0.3,
+        "drive": 0.0
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Rim",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "tone1": 350,
+        "tone2": 500,
+        "toneDecay": 0.03,
+        "noiseFreq": 5000,
+        "noiseQ": 4.0,
+        "noiseDecay": 0.05
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Tick Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.6,
+        "fundamental": 500,
+        "hpFreq": 9000,
+        "decay": 0.03
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Shimmer",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.5,
+        "length": 0.4,
+        "brightness": 4000,
+        "pitch": 1.5
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Dry Snap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "centerFreq": 2400,
+        "bursts": 2,
+        "spacing": 0.008,
+        "tailLength": 0.1,
+        "tailDecay": 6,
+        "tailMix": 0.1
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Ping",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "freq1": 1000,
+        "ratio": 1.1,
+        "q": 15,
+        "decay": 0.1
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Blip",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.75,
+        "startFreq": 500,
+        "endFreq": 250,
+        "pitchDecay": 0.02,
+        "decay": 0.1,
+        "noiseAmt": 0.0
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Pluck Tick",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "frequency": 600,
+        "damping": 0.9
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Grain",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.55,
+        "centerFreq": 4000,
+        "q": 6.0,
+        "decay": 0.05,
+        "chaosR": 3.7
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.5
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

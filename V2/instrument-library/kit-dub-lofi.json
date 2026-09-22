@@ -1,0 +1,172 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Dub Lo-fi",
+  "description": "Deep round kick, dark fat snare, muffled hats, long low crash, deep KS bass pluck.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "Deep Kick",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.92,
+        "startFreq": 70,
+        "endFreq": 41,
+        "pitchDecay": 0.05,
+        "ampDecay": 0.6,
+        "click": 0.1,
+        "drive": 0.2
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Fat Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "tone1": 170,
+        "tone2": 260,
+        "toneDecay": 0.25,
+        "noiseFreq": 1200,
+        "noiseQ": 2.0,
+        "noiseDecay": 0.35
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Soft Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "fundamental": 280,
+        "hpFreq": 4500,
+        "decay": 0.07
+      }
+    },
+    {
+      "id": "hihat-open",
+      "name": "Open Hat",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "hihat",
+      "params": {
+        "level": 0.6,
+        "fundamental": 280,
+        "hpFreq": 4500,
+        "decay": 0.6
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Low Wash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.6,
+        "length": 3.2,
+        "brightness": 500,
+        "pitch": 0.85
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Room Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "centerFreq": 900,
+        "bursts": 3,
+        "spacing": 0.018,
+        "tailLength": 0.6,
+        "tailDecay": 5,
+        "tailMix": 0.65
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Dub Bell",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "freq1": 500,
+        "ratio": 1.33,
+        "q": 5,
+        "decay": 0.6
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Dub Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "startFreq": 200,
+        "endFreq": 85,
+        "pitchDecay": 0.05,
+        "decay": 0.5,
+        "noiseAmt": 0.15
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Bass",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "frequency": 65,
+        "damping": 0.998
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Crackle",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.5,
+        "centerFreq": 700,
+        "q": 1.0,
+        "decay": 0.3,
+        "chaosR": 3.85
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}

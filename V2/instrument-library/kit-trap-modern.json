@@ -1,0 +1,172 @@
+{
+  "format": "d20-synth-project",
+  "version": 1,
+  "name": "Trap Modern",
+  "description": "Long sub 808 kick, bright tight hats for rolls, layered clap, bass pluck on KS.",
+  "voices": [
+    {
+      "id": "kick",
+      "name": "808 Sub",
+      "key": "1",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 1.0,
+        "startFreq": 120,
+        "endFreq": 28,
+        "pitchDecay": 0.09,
+        "ampDecay": 1.0,
+        "click": 0.25,
+        "drive": 0.3
+      }
+    },
+    {
+      "id": "snare",
+      "name": "Trap Snare",
+      "key": "2",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "tone1": 240,
+        "tone2": 480,
+        "toneDecay": 0.06,
+        "noiseFreq": 4200,
+        "noiseQ": 1.5,
+        "noiseDecay": 0.18
+      }
+    },
+    {
+      "id": "hihat",
+      "name": "Roll Hat",
+      "key": "3",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "fundamental": 400,
+        "hpFreq": 8500,
+        "decay": 0.03
+      }
+    },
+    {
+      "id": "hihat-open",
+      "name": "Open Hat",
+      "key": "",
+      "isClone": true,
+      "clonedFrom": "hihat",
+      "params": {
+        "level": 0.65,
+        "fundamental": 400,
+        "hpFreq": 8500,
+        "decay": 0.25
+      }
+    },
+    {
+      "id": "cymbal",
+      "name": "Crash",
+      "key": "4",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.65,
+        "length": 1.2,
+        "brightness": 2500,
+        "pitch": 1.3
+      }
+    },
+    {
+      "id": "clap",
+      "name": "Trap Clap",
+      "key": "5",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.9,
+        "centerFreq": 2000,
+        "bursts": 4,
+        "spacing": 0.009,
+        "tailLength": 0.35,
+        "tailDecay": 2.5,
+        "tailMix": 0.7
+      }
+    },
+    {
+      "id": "cowbell",
+      "name": "Metal Blip",
+      "key": "6",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.7,
+        "freq1": 800,
+        "ratio": 1.6,
+        "q": 10,
+        "decay": 0.15
+      }
+    },
+    {
+      "id": "tom",
+      "name": "Tom",
+      "key": "7",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "startFreq": 300,
+        "endFreq": 120,
+        "pitchDecay": 0.04,
+        "decay": 0.2,
+        "noiseAmt": 0.1
+      }
+    },
+    {
+      "id": "ks",
+      "name": "Bass Pluck",
+      "key": "8",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.85,
+        "frequency": 82,
+        "damping": 0.997
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "Tick",
+      "key": "9",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.55,
+        "centerFreq": 2800,
+        "q": 3.0,
+        "decay": 0.06,
+        "chaosR": 3.97
+      }
+    },
+    {
+      "id": "click1",
+      "name": "Click Hi",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 1.0
+      }
+    },
+    {
+      "id": "click2",
+      "name": "Click Lo",
+      "key": "",
+      "isClone": false,
+      "clonedFrom": null,
+      "params": {
+        "level": 0.8,
+        "pitch": 0.75
+      }
+    }
+  ]
+}
