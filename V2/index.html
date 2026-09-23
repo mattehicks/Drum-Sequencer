@@ -1335,6 +1335,11 @@ canvas{
 .voice.collapsed{gap:8px;}
 .voice.collapsed .voice-params, .voice.collapsed .theory{display:none;}
 .voice.collapsed .pad{padding:6px 0; font-size:10px; letter-spacing:0.08em;}
+/* Expanded card: two columns wide so the sliders have real travel, still
+   growing vertically rather than taking the whole rack. On very narrow
+   viewports a single column is all there is, so span the row instead. */
+.voice.expanded{grid-column:span 2;}
+@media (max-width:460px){ .voice.expanded{grid-column:1 / -1;} }
 .voice-key{
   font-family:var(--mono);
   font-size:11px;
