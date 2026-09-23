@@ -1277,7 +1277,7 @@ canvas{
    above -- the simple drum machine stays simple, and everything "produced"
    (layers, space, glue) lives and grows in here. Interface scaffold first;
    the render engine plugs into soundLab state later. ---- */
-.lab-intro{color:var(--muted,#8f8b86);font-size:12.5px;margin:0 0 14px;max-width:70ch;line-height:1.5;}
+.lab-intro{color:var(--muted,#8f8b86);font-size:12.5px;margin:16px 0 0;max-width:70ch;line-height:1.5;}
 .lab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:start;}
 .lab-group{background:rgba(255,255,255,0.03);border:1px solid var(--border,rgba(255,255,255,0.14));border-radius:10px;padding:12px;}
 .lab-group h4{margin:0 0 4px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent-2,#e9c46a);}
@@ -1689,7 +1689,6 @@ canvas{
       </button>
     </div>
     <section class="lab" id="soundLab" hidden>
-      <p class="lab-intro">A separate space from the drum machine above. The sequencer's voices stay simple single-chain synths on purpose; the Lab is for building bigger, produced, organic-feeling sounds -- layered hits with real length, room, and glue -- rendered offline and added to the rack as playable instruments. This is the interface scaffold; the render engine is the next build.</p>
       <div class="lab-grid">
 
         <div class="lab-group" id="labLayers">
@@ -1764,6 +1763,7 @@ canvas{
         <button type="button" class="lab-btn primary" id="labPreviewBtn">&#9654; Preview</button>
         <button type="button" class="lab-btn" id="labAddBtn">Add to Rack</button>
       </div>
+      <p class="lab-intro">A separate space from the drum machine above. The sequencer's voices stay simple single-chain synths on purpose; the Lab is for building bigger, produced, organic-feeling sounds -- layered hits with real length, room, and glue -- rendered offline and added to the rack as playable instruments. Dial in the layers, Preview, then Add to Rack: the recipe is stored with the voice and re-renders on project load.</p>
     </section>
   </section>
 
