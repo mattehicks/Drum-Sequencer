@@ -1646,7 +1646,7 @@ canvas{
         <output id="seqZoomVal" for="seqBody">100%</output>
         <button type="button" class="seq-beats-btn" id="seqZoomIn" aria-label="Zoom in the sequencer grid">+</button>
       </div>
-      <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Hide the per-beat slot-count/copy/paste strips (the shared one and every row's own) to save vertical space">Hide Bars</button>
+      <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Show or hide the per-beat slot-count/copy/paste strips (the shared one and every row's own); they start hidden to save vertical space">Show it</button>
       <button type="button" class="seq-clear seq-mutesolo-toggle" id="seqMuteSoloToggleBtn" aria-pressed="false" title="Show a Mute / Solo strip under every row">M/S</button>
       <button type="button" class="seq-clear" id="seqScreenshotBtn" title="Save a JPG image of just the instrument rows and step cells">Screenshot</button>
     </div>
@@ -5065,12 +5065,12 @@ seqScreenshotBtn.addEventListener('click', ()=>{
 // preference, like zoom -- and like zoom, saved with the project as of
 // uiState (see collectProjectState/applyProjectState).
 const seqBarsToggleBtn=document.getElementById('seqBarsToggleBtn');
-let seqBarsHidden=false;
+let seqBarsHidden=true;
 function seqApplyBarsVisibility(){
   sequencerEl.classList.toggle('seq-hide-bars', seqBarsHidden);
   seqBarsToggleBtn.classList.toggle('active', seqBarsHidden);
   seqBarsToggleBtn.setAttribute('aria-pressed', String(seqBarsHidden));
-  seqBarsToggleBtn.textContent=seqBarsHidden ? 'Show Bars' : 'Hide Bars';
+  seqBarsToggleBtn.textContent=seqBarsHidden ? 'Show it' : 'Hide it';
 }
 seqBarsToggleBtn.addEventListener('click', ()=>{
   seqBarsHidden=!seqBarsHidden;
@@ -6920,7 +6920,7 @@ function resetToNewProject(){
   // Same fresh-view defaults applyProjectState falls back to for a file
   // with no uiState at all.
   seqZoom=1; seqApplyZoom();
-  seqBarsHidden=false; seqApplyBarsVisibility();
+  seqBarsHidden=true; seqApplyBarsVisibility();
   seqMuteSoloShown=false; seqApplyMuteSoloVisibility();
   setAnalysisExpanded(false);
   setPatternsExpanded(false);
@@ -7145,7 +7145,7 @@ function applyProjectState(data){
   const ui=data.uiState||{};
   seqZoom=(typeof ui.zoom==='number') ? Math.min(SEQ_ZOOM_MAX, Math.max(SEQ_ZOOM_MIN, ui.zoom)) : 1;
   seqApplyZoom();
-  seqBarsHidden=!!ui.barsHidden;
+  seqBarsHidden=(ui.barsHidden===undefined) ? true : !!ui.barsHidden;
   seqApplyBarsVisibility();
   seqMuteSoloShown=!!ui.muteSoloShown;
   seqApplyMuteSoloVisibility();
