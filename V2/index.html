@@ -106,6 +106,7 @@ body{
   display:flex; align-items:center; justify-content:center;
   z-index:70; /* above the note keyboard (55) and context menu (60) */
 }
+#exportOverlay[hidden]{display:none;} /* author display:flex would otherwise defeat the hidden attribute */
 #exportModal{
   background:var(--panel,#16161c);
   border:1px solid rgba(255,255,255,0.25);
