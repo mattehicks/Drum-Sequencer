@@ -539,9 +539,12 @@ canvas{
 }
 .seq-cells{
   flex:none;
-  display:grid;
-  grid-auto-flow:column;
-  grid-auto-columns:var(--seq-cell);
+  /* Flex, not grid: the group gap is a margin-left on each group's first
+     cell, and a grid's fixed-width tracks don't grow for margins -- the
+     margined cell just bleeds over its neighbor. Flex lays cells out at
+     their true width + margin, so group boundaries widen the row instead
+     of overlapping it. */
+  display:flex;
   gap:var(--seq-gap);
 }
 /* The step cells are where the glass treatment matters most -- this is the
@@ -553,6 +556,7 @@ canvas{
    visible -- the gradient/border/shadow layering alone reads as glass. */
 .step{
   --glass-rgb:150,146,142; /* neutral glass when off */
+  flex:none; /* fixed cells: never shrink to fit the scroller */
   width:var(--seq-cell);
   aspect-ratio:1;
   padding:0;
