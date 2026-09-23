@@ -893,6 +893,10 @@ canvas{
 .seq-row-block{display:flex; flex-direction:column; transition:opacity 120ms;}
 .seq-row-block + .seq-row-block{margin-top:14px;}
 .seq-row-block.seq-row-silenced{opacity:0.4;}
+/* Performance groups: A/B row assignment + transport switcher. */
+.seq-perf-btn{min-width:34px;}
+.seq-perf-btn.active{border-color:var(--accent,#7ad0ff);color:var(--accent,#7ad0ff);}
+.seq-grp-btn.active{border-color:#e9c46a;color:#e9c46a;}
 .seq-row-flags{display:flex; align-items:center; gap:4px;}
 .seq-row-vol{
   flex:none;
@@ -1438,6 +1442,9 @@ canvas{
       </label>
       <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
       <button id="seqKeysBtn" class="seq-clear" type="button" title="Open the note keyboard: click a grid cell, then press a key to pin that pitch to the cell">Keys</button>
+      <button id="seqPerfA" class="seq-clear seq-perf-btn" type="button" title="Play only rows assigned to group A (plus unassigned rows). Shortcut: [">A</button>
+      <button id="seqPerfB" class="seq-clear seq-perf-btn" type="button" title="Play only rows assigned to group B (plus unassigned rows). Shortcut: ]">B</button>
+      <button id="seqPerfAB" class="seq-clear seq-perf-btn active" type="button" title="Play every row regardless of group. Shortcut: \">AB</button>
       <div class="seq-ctrl-group">
         <span class="seq-beats-label">Beats / measure</span>
         <button type="button" class="seq-beats-btn" id="seqBeatsDec" aria-label="Decrease beats per measure">&minus;</button>
@@ -2537,7 +2544,12 @@ function seqBeginCellVolDrag(btn, row, idx, startEvent){
 // everything un-soloed goes quiet regardless of its own mute state).
 function rowIsSilenced(row){
   if(row.muted) return true;
-  return seq.rows.some(r=>r.solo) && !row.solo;
+  if(seq.rows.some(r=>r.solo) && !row.solo) return true;
+  // Performance groups: a row tagged A or B is silent while the other group
+  // is selected; untagged rows (the default) play in every group, so a kit's
+  // core can run underneath while A/B parts trade places.
+  if(row.perf && seq.perfActive!=='AB' && row.perf!==seq.perfActive) return true;
+  return false;
 }
 
 // Dims every row's block to match its current silenced state, without a
@@ -3249,6 +3261,24 @@ function renderSequencer(){
     // just inverted, since this one starts off rather than on.
     const muteSoloCtrls=document.createElement('span');
     muteSoloCtrls.className='seq-mutesolo-ctrls';
+    const grpBtn=document.createElement('button');
+    grpBtn.type='button';
+    grpBtn.className='seq-flag-btn seq-grp-btn'+(row.perf?' active':'');
+    grpBtn.textContent=row.perf||'AB';
+    grpBtn.title=row.perf
+      ? 'This row plays only in group '+row.perf+'. Click to cycle (A / B / both).'
+      : 'This row plays in every group. Click to assign it to group A.';
+    grpBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      row.perf = row.perf==null ? 'A' : (row.perf==='A' ? 'B' : null);
+      grpBtn.textContent=row.perf||'AB';
+      grpBtn.classList.toggle('active', !!row.perf);
+      grpBtn.title=row.perf
+        ? 'This row plays only in group '+row.perf+'. Click to cycle (A / B / both).'
+        : 'This row plays in every group. Click to assign it to group A.';
+      seqPerfRefreshUI();
+    });
+    flags.appendChild(grpBtn);
     const muteBtn=document.createElement('button');
     muteBtn.type='button';
     muteBtn.className='seq-mute-btn'+(row.muted?' active':'');
@@ -4679,6 +4709,33 @@ function seqKeyPressed(midi, el){
   }
 }
 
+/* ---------- performance group switcher ---------- */
+// Live A/B arrangement switching: the transport keeps running and the
+// playhead never resets -- selecting a group only changes which rows sound
+// from the next scheduled step on, exactly like a mute scene. Rows carry an
+// optional A/B tag (the AB button on each row's flag line); untagged rows
+// play everywhere.
+seq.perfActive='AB';
+const seqPerfBtns={A:document.getElementById('seqPerfA'), B:document.getElementById('seqPerfB'), AB:document.getElementById('seqPerfAB')};
+function seqPerfRefreshUI(){
+  for(const k in seqPerfBtns) seqPerfBtns[k].classList.toggle('active', seq.perfActive===k);
+  updateRowSilencedStyles(); // same cheap pass mute/solo already use
+}
+function seqPerfSet(which){
+  if(seq.perfActive===which) return;
+  seq.perfActive=which;
+  seqPerfRefreshUI();
+}
+for(const k in seqPerfBtns) seqPerfBtns[k].addEventListener('click', ()=> seqPerfSet(k));
+document.addEventListener('keydown', (e)=>{
+  const t=e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.key==='[') seqPerfSet('A');
+  else if(e.key===']') seqPerfSet('B');
+  else if(e.key==='\\') seqPerfSet('AB');
+});
+
 const seqKeysBtn=document.getElementById('seqKeysBtn');
 function seqOpenKeys(){ keysPanel.hidden=false; seqRenderKeys(); seqKeysBtn.classList.add('active'); }
 function seqCloseKeys(){ keysPanel.hidden=true; seqKeysBtn.classList.remove('active'); }
@@ -5802,8 +5859,10 @@ function collectProjectState(){
         mode:r.unlinked ? (r.mode||'loop') : undefined,
         volume:r.volume!=null ? r.volume : undefined,
         muted:r.muted ? true : undefined,
-        solo:r.solo ? true : undefined
+        solo:r.solo ? true : undefined,
+        perf:r.perf || undefined
       })),
+      perfActive:(seq.perfActive && seq.perfActive!=='AB') ? seq.perfActive : undefined,
       pattern:Object.fromEntries(rowIds.map(id=>[id, seq.pattern[id].slice()])),
       velocity:Object.fromEntries(rowIds.map(id=>[id, (seq.velocity[id]||new Array(seq.pattern[id].length).fill(100)).slice()])),
       // Sparse per-cell voice overrides / pinned notes -- omitted entirely
@@ -5952,6 +6011,8 @@ function resetToNewProject(){
   seq.cellVoice={};
   seq.cellNote={};
   seqActiveCell=null;
+  seq.perfActive='AB';
+  if(typeof seqPerfRefreshUI==='function') setTimeout(seqPerfRefreshUI, 0);
   seq.rows.forEach(r=>{
     seq.pattern[r.id]=new Array(SEQ_STEPS).fill(false);
     seq.velocity[r.id]=new Array(SEQ_STEPS).fill(100);
@@ -6109,6 +6170,7 @@ function applyProjectState(data){
     if(typeof r.volume==='number') row.volume=Math.min(100, Math.max(0, Math.round(r.volume)));
     if(r.muted) row.muted=true;
     if(r.solo) row.solo=true;
+    if(r.perf==='A' || r.perf==='B') row.perf=r.perf;
     return row;
   }) : seq.rows;
   SEQ_STEPS=seq.groupSlots.reduce((a,b)=>a+b, 0);
@@ -6155,6 +6217,8 @@ function applyProjectState(data){
     }
   });
   seqActiveCell=null;
+  seq.perfActive=(s.perfActive==='A' || s.perfActive==='B') ? s.perfActive : 'AB';
+  if(typeof seqPerfRefreshUI==='function') setTimeout(seqPerfRefreshUI, 0);
   seqSyncRuntime={};
   seqRowHighlight={};
   rowClipboard=null;
