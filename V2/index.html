@@ -5244,6 +5244,12 @@ function seqApplyBarsVisibility(){
   seqBarsToggleBtn.classList.toggle('active', seqBarsHidden);
   seqBarsToggleBtn.setAttribute('aria-pressed', String(seqBarsHidden));
   // Label is a constant 'Show/Hide'; the active class + aria-pressed carry the state.
+  // The strips start hidden, so their boxes were last positioned while
+  // display:none -- where getBoundingClientRect reads all zeros. On reveal,
+  // re-render so left/width/height are measured against real layout;
+  // otherwise the boxes pile up and the stale strip height forces a
+  // vertical scrollbar.
+  if(!seqBarsHidden && typeof renderSequencer==='function') renderSequencer();
 }
 seqBarsToggleBtn.addEventListener('click', ()=>{
   seqBarsHidden=!seqBarsHidden;
