@@ -5140,8 +5140,14 @@ seqScreenshotBtn.addEventListener('click', ()=>{
 // disabled states refresh so the top panel can't go up, etc. Session-only,
 // like the collapse states.
 const PANEL_MOVE_IDS=['analysisPanel','rackSection','sequencer','patternsSection','soundLabSection','soloSection'];
+// querySelectorAll returns DOCUMENT order -- the live layout -- which is the
+// whole point: after a swap, the next click must reason about where panels
+// are NOW, not where the id list happens to enumerate them.
+function panelMoveList(){
+  return Array.from(document.querySelectorAll(PANEL_MOVE_IDS.map(id=>'#'+id).join(',')));
+}
 function panelMoveRefresh(){
-  const panels=PANEL_MOVE_IDS.map(id=>document.getElementById(id)).filter(Boolean);
+  const panels=panelMoveList();
   panels.forEach((p,i)=>{
     const up=p.querySelector('.panel-move [data-dir="up"]');
     const dn=p.querySelector('.panel-move [data-dir="dn"]');
@@ -5150,7 +5156,7 @@ function panelMoveRefresh(){
   });
 }
 function panelMove(panel, dir){
-  const panels=PANEL_MOVE_IDS.map(id=>document.getElementById(id)).filter(Boolean);
+  const panels=panelMoveList();
   const i=panels.indexOf(panel);
   const j=i+dir;
   if(i<0 || j<0 || j>=panels.length) return;
