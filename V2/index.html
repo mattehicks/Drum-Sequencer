@@ -489,6 +489,18 @@ canvas{
   align-items:center;
   gap:6px;
   max-width:100%;
+  /* Clickable box: selects this row as the active instrument for the
+     tap-in recorder and the note keyboard. */
+  border:1px solid rgba(255,255,255,0.16);
+  border-radius:6px;
+  padding:2px 6px;
+  cursor:pointer;
+  user-select:none;
+}
+.seq-row-name:hover{border-color:rgba(255,255,255,0.35);}
+.seq-row-name.sel-active{
+  border-color:var(--accent,#7ad0ff);
+  box-shadow:0 0 6px rgba(122,208,255,0.35);
 }
 .seq-row-name span{
   flex:1;
@@ -3751,6 +3763,13 @@ function renderSequencer(){
     nameText.textContent=voice.name;
     nameLine.appendChild(keyBadge);
     nameLine.appendChild(nameText);
+    nameLine.dataset.rowId=row.id;
+    nameLine.title='Click to make this the active instrument (tap-in recording and the note keyboard target it)';
+    if(typeof seqSelectedRowId!=='undefined' && seqSelectedRowId===row.id) nameLine.classList.add('sel-active');
+    nameLine.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      seqSelectRow(seqSelectedRowId===row.id ? null : row.id);
+    });
     label.appendChild(nameLine);
 
     const flags=document.createElement('span');
@@ -5491,7 +5510,18 @@ function seqRenderKeys(){
 function seqKeyPressed(midi, el){
   el.classList.add('pk-down');
   setTimeout(()=> el.classList.remove('pk-down'), 120);
-  if(!seqActiveCell){ showHint('Click a grid cell first -- the note pins to the active cell.'); return; }
+  if(!seqActiveCell){
+    // No cell targeted: the keyboard plays the ACTIVE INSTRUMENT live (the
+    // row whose boxed name is selected), retuned to the pressed note.
+    const selRow=seq.rows.find(r=>r.id===seqSelectedRowId);
+    const selVoice=selRow && VOICES.find(v=>v.id===selRow.voiceId);
+    if(selVoice && ctx){
+      selVoice.trigger(applyNoteToParams(selVoice, state.voices[selVoice.id], midiToFreq(midi)));
+    }else{
+      showHint('Click a grid cell (pins the note) or a row name (plays that instrument live).');
+    }
+    return;
+  }
   const row=seq.rows.find(r=>r.id===seqActiveCell.rowId);
   if(!row) return;
   const col=seqActiveCell.col;
@@ -5544,6 +5574,28 @@ document.addEventListener('keydown', (e)=>{
 // already scheduled (you tapped late), the hit is fired immediately as a
 // monitor so you still hear it this pass; otherwise the scheduler plays it
 // when the step arrives, avoiding a doubled flam.
+// ---- active row: one selected instrument that live inputs target ----
+// Clicking a row's boxed name selects it (click again to clear). The
+// tap-in recorder and the note keyboard both follow the selection, so
+// "play into the snare" is one click instead of a dropdown trip.
+let seqSelectedRowId=null;
+function seqRefreshRowSelection(){
+  document.querySelectorAll('.seq-row-name').forEach(el=>{
+    el.classList.toggle('sel-active', el.dataset.rowId===seqSelectedRowId);
+  });
+}
+function seqSelectRow(rowId){
+  seqSelectedRowId=rowId;
+  seqRefreshRowSelection();
+  if(rowId && typeof tapinRowSel!=='undefined'){
+    tapinFillRows();
+    tapinRowSel.value=rowId;
+  }
+  const row=seq.rows.find(r=>r.id===rowId);
+  const v=row && VOICES.find(x=>x.id===row.voiceId);
+  if(v) showHint('"'+v.name+'" is the active instrument -- tap-in and the note keyboard now target it.');
+}
+
 let tapinArmed=false;
 const tapinRecBtn=document.getElementById('tapinRecBtn');
 const tapinPad=document.getElementById('tapinPad');
@@ -5559,7 +5611,8 @@ function tapinFillRows(){
     o.textContent=v ? v.name : row.voiceId;
     tapinRowSel.appendChild(o);
   });
-  if(cur && seq.rows.some(r=>r.id===cur)) tapinRowSel.value=cur;
+  if(seqSelectedRowId && seq.rows.some(r=>r.id===seqSelectedRowId)) tapinRowSel.value=seqSelectedRowId;
+  else if(cur && seq.rows.some(r=>r.id===cur)) tapinRowSel.value=cur;
   else if(seqActiveCell && seq.rows.some(r=>r.id===seqActiveCell.rowId)) tapinRowSel.value=seqActiveCell.rowId;
 }
 tapinRowSel.addEventListener('focus', tapinFillRows);
