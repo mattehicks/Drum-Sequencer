@@ -6209,8 +6209,6 @@ window.addEventListener('blur', ()=>{ soloShiftHeld=false; soloPointerDown=false
 [['soloMapY','mapY'],['soloMapX','mapX']].forEach(([id,key])=>{
   document.getElementById(id).addEventListener('change', (e)=>{
     soloCfg[key]=e.target.value;
-    // Semitone gridlines are pitch furniture; hide them when Y is not pitch.
-    soloPadEl.querySelectorAll('.solo-line').forEach(el=>{ el.style.display=(soloCfg.mapY==='pitch')?'':'none'; });
     soloApply(); soloUpdateUI();
   });
 });
