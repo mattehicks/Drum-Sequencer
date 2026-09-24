@@ -5632,9 +5632,6 @@ function seqSelectRow(rowId){
     tapinFillRows();
     tapinRowSel.value=rowId;
   }
-  const row=seq.rows.find(r=>r.id===rowId);
-  const v=row && VOICES.find(x=>x.id===row.voiceId);
-  if(v) showHint('"'+v.name+'" is the active instrument -- tap-in and the note keyboard now target it.');
 }
 
 let tapinArmed=false;
