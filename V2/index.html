@@ -3958,6 +3958,7 @@ function renderSequencer(){
       e.preventDefault();
       e.stopPropagation();
       openContextMenu(e.clientX, e.clientY, [
+        {label:'Duplicate Row', onSelect:()=> seqDuplicateRow(row.id)},
         {label:'Delete Row', danger:true, disabled:seq.rows.length<=1, onSelect:()=> seqDeleteRow(row.id)}
       ]);
     });
@@ -4064,6 +4065,26 @@ function seqSetRowVoice(rowId, voiceId){
   const row=seq.rows.find(r=>r.id===rowId);
   if(!row || row.voiceId===voiceId) return;
   row.voiceId=voiceId;
+  renderSequencer();
+}
+
+function seqDuplicateRow(rowId){
+  const i=seq.rows.findIndex(r=>r.id===rowId);
+  if(i<0) return;
+  const srcRow=seq.rows[i];
+  const id=seqNewRowId();
+  // Everything the row IS travels with the copy: voice, mute/solo, A/B
+  // performance tag, link/own state and its own beat-group layout -- plus
+  // every per-step map keyed by row id (pattern, velocities, per-cell
+  // instrument overrides, pinned notes). The copy lands directly beneath
+  // its source.
+  const copy=JSON.parse(JSON.stringify(srcRow));
+  copy.id=id;
+  seq.rows.splice(i+1, 0, copy);
+  seq.pattern[id]=(seq.pattern[srcRow.id]||new Array(SEQ_STEPS).fill(false)).slice();
+  seq.velocity[id]=(seq.velocity[srcRow.id]||new Array(SEQ_STEPS).fill(100)).slice();
+  seq.cellVoice[id]=seq.cellVoice[srcRow.id] ? {...seq.cellVoice[srcRow.id]} : {};
+  seq.cellNote[id]=seq.cellNote[srcRow.id] ? {...seq.cellNote[srcRow.id]} : {};
   renderSequencer();
 }
 
