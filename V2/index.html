@@ -1170,17 +1170,17 @@ canvas{
 .rack-head .analysis-toggle, .patterns-head .analysis-toggle, .analysis-head .analysis-toggle{flex:1; text-align:left;}
 .panel-move{margin-left:auto; display:flex; gap:4px; flex:none;}
 .panel-move button{
-  width:22px; height:22px;
+  width:30px; height:30px;
   background:var(--panel-2,#1c1c24);
-  color:var(--subtext,#8f8b86);
-  border:1px solid var(--border,rgba(255,255,255,0.2));
-  border-radius:5px;
+  color:#cfcbc6;
+  border:1px solid rgba(255,255,255,0.35);
+  border-radius:6px;
   cursor:pointer;
-  font-size:10px;
+  font-size:16px;
   line-height:1;
   padding:0;
 }
-.panel-move button:hover{color:var(--text,#eee); border-color:rgba(255,255,255,0.45);}
+.panel-move button:hover{color:#fff; border-color:rgba(255,255,255,0.65); background:rgba(255,255,255,0.06);}
 .panel-move button:disabled{opacity:0.25; cursor:default;}
 /* The sequencer's arrows ride its toolbar, pushed to the far right. */
 .seq-head .panel-move{align-self:center;}
