@@ -769,6 +769,9 @@ canvas{
 }
 .solo-ctl{min-width:200px;display:flex;flex-direction:column;gap:6px;}
 .solo-ctl .lab-row{grid-template-columns:64px 1fr 46px;}
+.solo-ctl .lab-row label{display:flex;align-items:center;gap:5px;}
+.solo-ing-head{margin-top:8px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent-2,#e9c46a);}
+.solo-ctl input[type=text]{background:var(--panel-2,#1c1c24);color:#eee;border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:5px 8px;font-size:12px;min-width:0;}
 .solo-hint{flex-basis:100%;color:#8f8b86;font-size:11.5px;line-height:1.5;max-width:70ch;}
 #soloRecBtn{margin-top:4px;}
 #soloRecBtn.armed{border-color:#e9c46a;color:#e9c46a;}
@@ -1843,7 +1846,7 @@ canvas{
       </button>
     </div>
     <section id="soloBody" hidden>
-      <p class="solo-hint">A live lead over the sequencer. <b>Up/down = pitch, left/right = volume.</b> Two ways to gate the tone: press and drag on the pad (works on touch), or hold <b>Shift</b> while the cursor is over the pad to play theremin-style without clicking. Needs the engine running -- it starts itself on first use.</p>
+      <p class="solo-hint">Press and drag on the pad (works on touch), or hold <b>Shift</b> while the cursor is over the pad to play theremin-style without clicking. Needs the engine running -- it starts itself on first use.</p>
       <div class="solo-wrap">
         <div id="soloPad">
           <div id="soloDot"></div>
@@ -1870,6 +1873,14 @@ canvas{
           <div class="lab-row"><label for="soloOct">Range</label><input type="range" id="soloOct" min="1" max="4" step="1" value="3"><output>3 oct</output></div>
           <div class="lab-row"><label for="soloGlide">Glide</label><input type="range" id="soloGlide" min="0" max="0.3" step="0.005" value="0.03"><output>30 ms</output></div>
           <div class="lab-row"><label for="soloSnap">Snap</label><input type="checkbox" id="soloSnap"><output></output></div>
+          <div class="solo-ing-head">Ingredients</div>
+          <div class="lab-row"><label><input type="checkbox" id="soloIngSub"> Sub</label><input type="range" id="soloIngSubAmt" min="0" max="1" step="0.01" value="0.5"><output>50%</output></div>
+          <div class="lab-row"><label><input type="checkbox" id="soloIngLayer"> Layer</label><input type="range" id="soloIngLayerAmt" min="0" max="1" step="0.01" value="0.5"><output>50%</output></div>
+          <div class="lab-row"><label><input type="checkbox" id="soloIngNoise"> Noise</label><input type="range" id="soloIngNoiseAmt" min="0" max="1" step="0.01" value="0.3"><output>30%</output></div>
+          <div class="lab-row"><label><input type="checkbox" id="soloIngDrive"> Drive</label><input type="range" id="soloIngDriveAmt" min="0" max="1" step="0.01" value="0.4"><output>40%</output></div>
+          <div class="lab-row"><label><input type="checkbox" id="soloIngEcho"> Echo</label><input type="range" id="soloIngEchoAmt" min="0" max="1" step="0.01" value="0.35"><output>35%</output></div>
+          <div class="lab-row"><label for="soloPatchName">Name</label><input type="text" id="soloPatchName" value="Pad Sound 1"></div>
+          <button type="button" class="lab-btn" id="soloSaveBtn" title="Save the pad's current sound -- wave, pitch where the dot sits, filter, and every enabled ingredient -- as a new rack instrument you can sequence">Save as Instrument</button>
           <button type="button" class="lab-btn" id="soloRecBtn">&#9210; Arm Recorder</button>
           <div id="soloRecStatus">Arm, then play: recording starts at your first note. Enter stops it (2 s max) and saves it to the rack.</div>
         </div>
@@ -3950,8 +3961,19 @@ function renderSequencer(){
     rowEl.addEventListener('contextmenu', (e)=>{
       e.preventDefault();
       e.stopPropagation();
+      // Group assignment lives here as well as on the row's AB cycle
+      // button -- same row.perf state, menu just makes it explicit. The
+      // check marks the current assignment; null means play-in-both.
+      const perfNow=row.perf||null;
+      const grpItem=(tag,label)=>({
+        label:(perfNow===tag ? '\u2713 ' : '')+label,
+        onSelect:()=>{ row.perf=tag; renderSequencer(); }
+      });
       openContextMenu(e.clientX, e.clientY, [
         {label:'Duplicate Row', onSelect:()=> seqDuplicateRow(row.id)},
+        grpItem('A','Assign to Group A'),
+        grpItem('B','Assign to Group B'),
+        grpItem(null,'Play in Both Groups'),
         {label:'Delete Row', danger:true, disabled:seq.rows.length<=1, onSelect:()=> seqDeleteRow(row.id)}
       ]);
     });
@@ -6115,18 +6137,35 @@ function soloUpdateUI(){
   soloPadEl.classList.toggle('live', soloGated());
 }
 
+// Ingredients: optional layers stacked onto the live pad chain. Each is a
+// node that idles at zero until enabled, so toggling never rebuilds audio.
+const soloIng={
+  sub:{on:false, amt:0.5},    // sine an octave down, for weight
+  layer:{on:false, amt:0.5},  // detuned copy of the main osc, for width
+  noise:{on:false, amt:0.3},  // breath/texture into the same filter
+  drive:{on:false, amt:0.4},  // tanh waveshaper after the filter
+  echo:{on:false, amt:0.35}   // feedback delay tap off the output
+};
 let soloFilter=null, soloLfo=null, soloLfoGain=null;
+let soloSubOsc=null, soloSubGain=null, soloLayerOsc=null, soloLayerGain=null;
+let soloNoiseSrc=null, soloNoiseGain=null, soloShaper=null, soloDriveKey=null;
+let soloDelay=null, soloEchoFb=null, soloEchoWet=null;
 function soloEnsureVoice(){
   if(soloOsc || !ctx) return;
+  // sources (osc + sub + layer + noise) -> lowpass -> shaper -> gain ->
+  // master, with a 5.5 Hz LFO into every osc's detune for vibrato and a
+  // feedback delay tapped off the gain for echo. Filter, LFO, shaper and
+  // every ingredient idle transparently until enabled/mapped.
   soloOsc=ctx.createOscillator();
   soloOsc.type=soloCfg.wave;
   soloOsc.frequency.value=soloFreq();
-  // osc -> lowpass -> gain -> master, with a 5.5 Hz LFO into detune for
-  // vibrato. Filter and LFO idle transparently until an axis maps them.
   soloFilter=ctx.createBiquadFilter();
   soloFilter.type='lowpass';
   soloFilter.frequency.value=soloCutoff();
   soloFilter.Q.value=soloReso();
+  soloShaper=ctx.createWaveShaper();
+  soloShaper.curve=makeSaturationCurve(0);
+  soloDriveKey='0';
   soloGainNode=ctx.createGain();
   soloGainNode.gain.value=0;
   soloLfo=ctx.createOscillator();
@@ -6135,11 +6174,37 @@ function soloEnsureVoice(){
   soloLfoGain.gain.value=0;
   soloLfo.connect(soloLfoGain);
   soloLfoGain.connect(soloOsc.detune);
+  soloSubOsc=ctx.createOscillator();
+  soloSubOsc.type='sine';
+  soloSubOsc.frequency.value=soloFreq()/2;
+  soloSubGain=ctx.createGain(); soloSubGain.gain.value=0;
+  soloSubOsc.connect(soloSubGain); soloSubGain.connect(soloFilter);
+  soloLfoGain.connect(soloSubOsc.detune);
+  soloLayerOsc=ctx.createOscillator();
+  soloLayerOsc.type=soloCfg.wave;
+  soloLayerOsc.frequency.value=soloFreq();
+  soloLayerGain=ctx.createGain(); soloLayerGain.gain.value=0;
+  soloLayerOsc.connect(soloLayerGain); soloLayerGain.connect(soloFilter);
+  soloLfoGain.connect(soloLayerOsc.detune);
+  soloNoiseGain=ctx.createGain(); soloNoiseGain.gain.value=0;
+  if(noiseBuffer){
+    soloNoiseSrc=ctx.createBufferSource();
+    soloNoiseSrc.buffer=noiseBuffer; soloNoiseSrc.loop=true;
+    soloNoiseSrc.connect(soloNoiseGain);
+    soloNoiseSrc.start();
+  }
+  soloNoiseGain.connect(soloFilter);
+  soloDelay=ctx.createDelay(1.0); soloDelay.delayTime.value=0.28;
+  soloEchoFb=ctx.createGain(); soloEchoFb.gain.value=0;
+  soloEchoWet=ctx.createGain(); soloEchoWet.gain.value=0;
+  soloDelay.connect(soloEchoFb); soloEchoFb.connect(soloDelay);
+  soloDelay.connect(soloEchoWet); soloEchoWet.connect(master);
   soloOsc.connect(soloFilter);
-  soloFilter.connect(soloGainNode);
+  soloFilter.connect(soloShaper);
+  soloShaper.connect(soloGainNode);
   soloGainNode.connect(master);
-  soloOsc.start();
-  soloLfo.start();
+  soloGainNode.connect(soloDelay);
+  soloOsc.start(); soloSubOsc.start(); soloLayerOsc.start(); soloLfo.start();
 }
 
 function soloApply(){
@@ -6151,6 +6216,18 @@ function soloApply(){
   soloFilter.frequency.setTargetAtTime(soloCutoff(), now, 0.015);
   soloFilter.Q.setTargetAtTime(soloReso(), now, 0.02);
   soloLfoGain.gain.setTargetAtTime(soloVibrato(), now, 0.03);
+  const f=soloFreq();
+  soloSubOsc.frequency.setTargetAtTime(f/2, now, Math.max(0.001, soloCfg.glide));
+  soloSubGain.gain.setTargetAtTime(soloIng.sub.on ? soloIng.sub.amt*0.6 : 0, now, 0.02);
+  soloLayerOsc.type=soloCfg.wave;
+  // The layer sits 6-30 cents sharp of the main osc -- classic two-osc width.
+  soloLayerOsc.frequency.setTargetAtTime(f*Math.pow(2, (6+soloIng.layer.amt*24)/1200), now, Math.max(0.001, soloCfg.glide));
+  soloLayerGain.gain.setTargetAtTime(soloIng.layer.on ? soloIng.layer.amt*0.5 : 0, now, 0.02);
+  soloNoiseGain.gain.setTargetAtTime(soloIng.noise.on ? soloIng.noise.amt*0.25 : 0, now, 0.02);
+  const dk=soloIng.drive.on ? soloIng.drive.amt.toFixed(2) : '0';
+  if(dk!==soloDriveKey){ soloShaper.curve=makeSaturationCurve(parseFloat(dk)); soloDriveKey=dk; } // curves are lookup tables; only rebuild when the amount changes
+  soloEchoFb.gain.setTargetAtTime(soloIng.echo.on ? soloIng.echo.amt*0.55 : 0, now, 0.02);
+  soloEchoWet.gain.setTargetAtTime(soloIng.echo.on ? soloIng.echo.amt*0.5 : 0, now, 0.02);
   const target=soloGated() ? soloVol()*soloCfg.level : 0;
   // Fast-but-not-instant gain chase: ~10ms feels immediate and never clicks.
   soloGainNode.gain.setTargetAtTime(target, now, soloGated() ? 0.01 : 0.03);
@@ -6224,6 +6301,17 @@ document.getElementById('soloWave').addEventListener('change', (e)=>{ soloCfg.wa
   });
 });
 document.getElementById('soloSnap').addEventListener('change', (e)=>{ soloCfg.snap=e.target.checked; soloApply(); soloUpdateUI(); });
+[['sub','soloIngSub'],['layer','soloIngLayer'],['noise','soloIngNoise'],['drive','soloIngDrive'],['echo','soloIngEcho']].forEach(([key,id])=>{
+  const cb=document.getElementById(id);
+  const amt=document.getElementById(id+'Amt');
+  const out=amt.closest('.lab-row').querySelector('output');
+  cb.addEventListener('change', ()=>{ soloIng[key].on=cb.checked; soloApply(); });
+  amt.addEventListener('input', ()=>{
+    soloIng[key].amt=parseFloat(amt.value);
+    out.textContent=Math.round(soloIng[key].amt*100)+'%';
+    soloApply();
+  });
+});
 
 /* ---------- Solo sample recorder ---------- */
 // Captures the Solo Pad's own output (post volume-gesture, so the swell is
@@ -6345,6 +6433,102 @@ function makeSampleVoice(sampleData, saved, name){
     ]
   };
 }
+
+// A pad sound saved as an instrument: not a recording but the RECIPE --
+// wave, the pitch under the dot at save time, filter state, and every
+// enabled ingredient -- resynthesized per hit with a percussive envelope.
+// Tiny in the project file, and retunable per cell like any pitch voice.
+function makeSoloPatchVoice(patch, saved, name){
+  const id=(saved && saved.id) || ('pad-'+Date.now().toString(36)+'-'+Math.floor(Math.random()*1e4));
+  return {
+    id,
+    key:(saved && saved.key)||'',
+    name:(saved && saved.name) || name || 'Pad Sound',
+    isClone:false,
+    clonedFrom:null,
+    soloPatch:patch,
+    trigger:(p, when)=>{
+      if(!ctx) return false;
+      const t=(when!=null)?when:ctx.currentTime;
+      const ing=patch.ing||{};
+      const f=(patch.freq||220)*p.pitch;
+      const decay=Math.max(0.05, p.decay||0.5);
+      const filter=ctx.createBiquadFilter();
+      filter.type='lowpass';
+      filter.frequency.value=patch.cutoff||12000;
+      filter.Q.value=patch.reso||0.7;
+      let post=filter;
+      if(ing.drive && ing.drive.on){
+        const sh=ctx.createWaveShaper();
+        sh.curve=makeSaturationCurve(ing.drive.amt);
+        filter.connect(sh); post=sh;
+      }
+      const env=ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(Math.max(0.001, p.level), t+0.004);
+      env.gain.exponentialRampToValueAtTime(0.0001, t+decay);
+      post.connect(env);
+      const bus=ctx.createGain(); bus.gain.value=1;
+      env.connect(bus); bus.connect(master);
+      const stopAt=t+decay+0.05;
+      let tail=0.1;
+      if(ing.echo && ing.echo.on){
+        const dl=ctx.createDelay(1.0); dl.delayTime.value=0.28;
+        const fb=ctx.createGain(); fb.gain.value=ing.echo.amt*0.55;
+        const wet=ctx.createGain(); wet.gain.value=ing.echo.amt*0.5;
+        env.connect(dl); dl.connect(fb); fb.connect(dl);
+        dl.connect(wet); wet.connect(bus);
+        tail=1.6; // let the repeats ring past the dry hit
+      }
+      const osc=ctx.createOscillator();
+      osc.type=patch.wave||'sawtooth'; osc.frequency.value=f;
+      osc.connect(filter); osc.start(t); osc.stop(stopAt);
+      if(ing.sub && ing.sub.on){
+        const sub=ctx.createOscillator(); sub.type='sine'; sub.frequency.value=f/2;
+        const sg=ctx.createGain(); sg.gain.value=ing.sub.amt*0.6;
+        sub.connect(sg); sg.connect(filter); sub.start(t); sub.stop(stopAt);
+      }
+      if(ing.layer && ing.layer.on){
+        const lay=ctx.createOscillator(); lay.type=patch.wave||'sawtooth';
+        lay.frequency.value=f*Math.pow(2, (6+ing.layer.amt*24)/1200);
+        const lg=ctx.createGain(); lg.gain.value=ing.layer.amt*0.5;
+        lay.connect(lg); lg.connect(filter); lay.start(t); lay.stop(stopAt);
+      }
+      if(ing.noise && ing.noise.on && noiseBuffer){
+        const ns=ctx.createBufferSource(); ns.buffer=noiseBuffer; ns.loop=true;
+        const ng=ctx.createGain(); ng.gain.value=ing.noise.amt*0.25;
+        ns.connect(ng); ng.connect(filter); ns.start(t); ns.stop(stopAt);
+      }
+      setTimeout(()=>{ try{ bus.disconnect(); }catch(_){ } }, (stopAt-ctx.currentTime+tail)*1000);
+      return true;
+    },
+    theory:'A Solo Pad recipe frozen as an instrument: the pad\'s oscillator ('+(patch.wave||'sawtooth')+', '+Math.round(patch.freq||220)+' Hz at save time), lowpass state, and its enabled ingredients (sub, detuned layer, noise, drive, echo) resynthesized per hit under an exponential-decay envelope. Stored as the recipe, not audio -- a few hundred bytes in the project file, retuned per cell via the Pitch knob like the clicks and Lab voices.',
+    params:[
+      {id:'level',label:'Level',min:0,max:1,step:0.01,value:0.85,unit:''},
+      {id:'pitch',label:'Pitch',min:0.25,max:4,step:0.01,value:1.0,unit:''},
+      {id:'decay',label:'Decay',min:0.05,max:2,step:0.01,value:0.5,unit:'s'}
+    ]
+  };
+}
+
+let soloPatchSeq=1;
+document.getElementById('soloSaveBtn').addEventListener('click', ()=>{
+  const nameInput=document.getElementById('soloPatchName');
+  const name=nameInput.value.trim()||('Pad Sound '+soloPatchSeq);
+  const patch={
+    wave:soloCfg.wave,
+    freq:Math.round(soloFreq()*10)/10,      // the pitch under the dot right now
+    cutoff:Math.round(soloCutoff()),
+    reso:Math.round(soloReso()*100)/100,
+    ing:JSON.parse(JSON.stringify(soloIng))
+  };
+  const voice=makeSoloPatchVoice(patch, null, name);
+  VOICES.push(voice);
+  state.voices[voice.id]={level:0.85, pitch:1.0, decay:0.5};
+  renderVoices();
+  soloPatchSeq++;
+  nameInput.value='Pad Sound '+soloPatchSeq;
+});
 
 soloRecBtn.addEventListener('click', ()=>{
   if(recActive){ recStop(); return; }
@@ -7039,6 +7223,7 @@ function collectProjectState(){
       clonedFrom:v.clonedFrom||null,
       labParams:v.labParams||undefined,
       sampleData:v.sampleData||undefined,
+      soloPatch:v.soloPatch||undefined,
       params:{...state.voices[v.id]}
     }))
   };
@@ -7238,6 +7423,15 @@ function applyVoicesState(savedVoices){
         rebuilt.push(smp);
         byId[smp.id]=smp;
         newVoiceState[smp.id]=sv.params ? {...sv.params} : {level:0.85, pitch:1.0};
+        return;
+      }
+      if(sv.soloPatch){
+        // A saved pad recipe: pure synthesis, so rebuilding is just
+        // re-wrapping the stored patch -- no buffers, no render queue.
+        const pv=makeSoloPatchVoice(sv.soloPatch, sv);
+        rebuilt.push(pv);
+        byId[pv.id]=pv;
+        newVoiceState[pv.id]=sv.params ? {...sv.params} : {level:0.85, pitch:1.0, decay:0.5};
         return;
       }
       if(sv.labParams){
