@@ -1063,12 +1063,6 @@ canvas{
 .seq-grp-btn.active{border-color:#e9c46a;color:#e9c46a;}
 /* Tap-in recording: arm button + the big green tap pad. */
 .tapin-wrap{display:flex;align-items:center;gap:8px;}
-#tapinRow{
-  background:var(--panel-2,#1c1c24); color:#eee;
-  border:1px solid rgba(255,255,255,0.25);
-  border-radius:6px; padding:4px 6px; font-size:12px;
-  max-width:110px;
-}
 #tapinRecBtn.active{border-color:#ff5d5d;color:#ff5d5d;}
 #tapinPad{
   width:52px;height:52px;
@@ -1701,9 +1695,8 @@ canvas{
       <button id="seqPerfB" class="seq-clear seq-perf-btn" type="button" title="Play only rows assigned to group B (plus unassigned rows). Shortcut: ]">B</button>
       <button id="seqPerfAB" class="seq-clear seq-perf-btn active" type="button" title="Play every row regardless of group. Shortcut: \">AB</button>
       <span class="tapin-wrap">
-        <select id="tapinRow" title="Which row your taps record into"></select>
-        <button id="tapinRecBtn" class="seq-clear" type="button" title="Arm tap-in recording (starts playback if stopped). While armed, every tap on the green pad writes a hit into the selected row at the nearest step.">&#9210; Rec</button>
-        <button id="tapinPad" type="button" disabled title="Tap here (mouse or touch) while Rec is armed -- each tap lands on the nearest step of the selected row" aria-label="Tap pad"></button>
+        <button id="tapinRecBtn" class="seq-clear" type="button" title="Arm tap-in recording (starts playback if stopped). While armed, every tap on the green pad writes a hit into the ACTIVE instrument's row (click a row name to select it) at the nearest step.">&#9210; Rec</button>
+        <button id="tapinPad" type="button" disabled title="Tap here (mouse or touch) while Rec is armed -- each tap lands on the nearest step of the active instrument's row" aria-label="Tap pad"></button>
       </span>
       <div class="seq-ctrl-group">
         <span class="seq-beats-label">Bars</span>
@@ -5767,33 +5760,11 @@ function seqRefreshRowSelection(){
 function seqSelectRow(rowId){
   seqSelectedRowId=rowId;
   seqRefreshRowSelection();
-  if(rowId && typeof tapinRowSel!=='undefined'){
-    tapinFillRows();
-    tapinRowSel.value=rowId;
-  }
 }
 
 let tapinArmed=false;
 const tapinRecBtn=document.getElementById('tapinRecBtn');
 const tapinPad=document.getElementById('tapinPad');
-const tapinRowSel=document.getElementById('tapinRow');
-
-function tapinFillRows(){
-  const cur=tapinRowSel.value;
-  tapinRowSel.innerHTML='';
-  seq.rows.forEach(row=>{
-    const v=VOICES.find(x=>x.id===row.voiceId);
-    const o=document.createElement('option');
-    o.value=row.id;
-    o.textContent=v ? v.name : row.voiceId;
-    tapinRowSel.appendChild(o);
-  });
-  if(seqSelectedRowId && seq.rows.some(r=>r.id===seqSelectedRowId)) tapinRowSel.value=seqSelectedRowId;
-  else if(cur && seq.rows.some(r=>r.id===cur)) tapinRowSel.value=cur;
-  else if(seqActiveCell && seq.rows.some(r=>r.id===seqActiveCell.rowId)) tapinRowSel.value=seqActiveCell.rowId;
-}
-tapinRowSel.addEventListener('focus', tapinFillRows);
-tapinFillRows();
 
 function tapinSetArmed(on){
   tapinArmed=on;
@@ -5803,16 +5774,19 @@ function tapinSetArmed(on){
 }
 tapinRecBtn.addEventListener('click', async ()=>{
   if(tapinArmed){ tapinSetArmed(false); return; }
-  tapinFillRows();
-  if(!(await labEnsureAudioRunning())){ showHint('Could not start the audio engine.'); return; }
+  if(!(await labEnsureAudioRunning())) return;
   if(!seq.playing) seqStart(); // tap-in needs a moving playhead
   tapinSetArmed(true);
-  showHint('Tap-in armed: hit the green pad in time -- taps write into "'+(tapinRowSel.selectedOptions[0]||{}).textContent+'".');
 });
 
 function tapinTap(){
   if(!tapinArmed || !seq.playing || !ctx) return;
-  const row=seq.rows.find(r=>r.id===tapinRowSel.value) || seq.rows[0];
+  // The ACTIVE instrument (a clicked row name) is the target; falls back to
+  // the active cell's row, then the first row, so an unselected state still
+  // records somewhere sensible.
+  const row=seq.rows.find(r=>r.id===seqSelectedRowId)
+    || (seqActiveCell && seq.rows.find(r=>r.id===seqActiveCell.rowId))
+    || seq.rows[0];
   if(!row) return;
   const sps=seqSecondsPerStep();
   // Where the transport actually IS right now, as a float step index:
