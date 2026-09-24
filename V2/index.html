@@ -2926,10 +2926,9 @@ function deleteVoiceClone(voiceId){
 
 let hintTimer=null;
 function showHint(msg){
-  const el=document.getElementById('hint');
-  el.textContent=msg;
-  clearTimeout(hintTimer);
-  hintTimer=setTimeout(()=>{ el.textContent=''; }, 2500);
+  // Notifications are OFF by request: every one of the ~50 call sites still
+  // works, this sink just swallows them. To bring hints back, restore the
+  // old body (set #hint's textContent with a 2.5 s clear timer).
 }
 
 function firePad(voice, padEl){
