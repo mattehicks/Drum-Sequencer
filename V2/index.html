@@ -1695,7 +1695,7 @@ canvas{
           <option value="8">1/32</option>
         </select>
       </label>
-      <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
+      <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Show or hide the per-beat slot-count/copy/paste strips (the shared one and every row's own); they start hidden to save vertical space">Show/Hide</button>
       <button id="seqKeysBtn" class="seq-clear" type="button" title="Open the note keyboard: click a grid cell, then press a key to pin that pitch to the cell">Keys</button>
       <button id="seqPerfA" class="seq-clear seq-perf-btn" type="button" title="Play only rows assigned to group A (plus unassigned rows). Shortcut: [">A</button>
       <button id="seqPerfB" class="seq-clear seq-perf-btn" type="button" title="Play only rows assigned to group B (plus unassigned rows). Shortcut: ]">B</button>
@@ -1717,7 +1717,7 @@ canvas{
         <output id="seqZoomVal" for="seqBody">100%</output>
         <button type="button" class="seq-beats-btn" id="seqZoomIn" aria-label="Zoom in the sequencer grid">+</button>
       </div>
-      <button type="button" class="seq-clear seq-bars-toggle" id="seqBarsToggleBtn" aria-pressed="false" title="Show or hide the per-beat slot-count/copy/paste strips (the shared one and every row's own); they start hidden to save vertical space">Show it</button>
+      <button id="seqClearBtn" class="seq-clear" type="button">Clear</button>
       <button type="button" class="seq-clear seq-mutesolo-toggle" id="seqMuteSoloToggleBtn" aria-pressed="false" title="Show a Mute / Solo strip under every row">M/S</button>
       <button type="button" class="seq-clear" id="seqScreenshotBtn" title="Save a JPG image of just the instrument rows and step cells">Screenshot</button>
     </div>
@@ -5228,7 +5228,7 @@ function seqApplyBarsVisibility(){
   sequencerEl.classList.toggle('seq-hide-bars', seqBarsHidden);
   seqBarsToggleBtn.classList.toggle('active', seqBarsHidden);
   seqBarsToggleBtn.setAttribute('aria-pressed', String(seqBarsHidden));
-  seqBarsToggleBtn.textContent=seqBarsHidden ? 'Show it' : 'Hide it';
+  // Label is a constant 'Show/Hide'; the active class + aria-pressed carry the state.
 }
 seqBarsToggleBtn.addEventListener('click', ()=>{
   seqBarsHidden=!seqBarsHidden;
