@@ -1164,6 +1164,26 @@ canvas{
   padding:14px 16px 16px;
 }
 .patterns-head{margin-bottom:10px;}
+/* Panel reordering: small up/down arrows on the right side of every panel's
+   title bar; each click swaps the panel with its neighbor. */
+.rack-head, .patterns-head{display:flex; align-items:center;}
+.rack-head .analysis-toggle, .patterns-head .analysis-toggle, .analysis-head .analysis-toggle{flex:1; text-align:left;}
+.panel-move{margin-left:auto; display:flex; gap:4px; flex:none;}
+.panel-move button{
+  width:22px; height:22px;
+  background:var(--panel-2,#1c1c24);
+  color:var(--subtext,#8f8b86);
+  border:1px solid var(--border,rgba(255,255,255,0.2));
+  border-radius:5px;
+  cursor:pointer;
+  font-size:10px;
+  line-height:1;
+  padding:0;
+}
+.panel-move button:hover{color:var(--text,#eee); border-color:rgba(255,255,255,0.45);}
+.panel-move button:disabled{opacity:0.25; cursor:default;}
+/* The sequencer's arrows ride its toolbar, pushed to the far right. */
+.seq-head .panel-move{align-self:center;}
 .arrangement-block h3{
   font-size:12px;
   text-transform:uppercase;
@@ -5113,6 +5133,53 @@ seqScreenshotBtn.addEventListener('click', ()=>{
 // single one when you just want to look at (or play) the grid. A view
 // preference, like zoom -- and like zoom, saved with the project as of
 // uiState (see collectProjectState/applyProjectState).
+/* ---------- panel reordering ---------- */
+// Every major panel gets up/down arrows on the right side of its title bar.
+// A click swaps the panel with its neighbor among the reorderable siblings
+// (the DOM is the order -- nothing else tracks it), then the arrows'
+// disabled states refresh so the top panel can't go up, etc. Session-only,
+// like the collapse states.
+const PANEL_MOVE_IDS=['analysisPanel','rackSection','sequencer','patternsSection','soundLabSection','soloSection'];
+function panelMoveRefresh(){
+  const panels=PANEL_MOVE_IDS.map(id=>document.getElementById(id)).filter(Boolean);
+  panels.forEach((p,i)=>{
+    const up=p.querySelector('.panel-move [data-dir="up"]');
+    const dn=p.querySelector('.panel-move [data-dir="dn"]');
+    if(up) up.disabled=(i===0);
+    if(dn) dn.disabled=(i===panels.length-1);
+  });
+}
+function panelMove(panel, dir){
+  const panels=PANEL_MOVE_IDS.map(id=>document.getElementById(id)).filter(Boolean);
+  const i=panels.indexOf(panel);
+  const j=i+dir;
+  if(i<0 || j<0 || j>=panels.length) return;
+  const other=panels[j];
+  if(dir<0) other.parentNode.insertBefore(panel, other);
+  else other.parentNode.insertBefore(panel, other.nextSibling);
+  panelMoveRefresh();
+  panel.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+PANEL_MOVE_IDS.forEach(id=>{
+  const panel=document.getElementById(id);
+  if(!panel) return;
+  const head=panel.querySelector('.analysis-head, .rack-head, .patterns-head, .seq-head');
+  if(!head) return;
+  const wrap=document.createElement('span');
+  wrap.className='panel-move';
+  [['up','\u25b4','Move this panel up',-1],['dn','\u25be','Move this panel down',1]].forEach(([dir,glyph,title,delta])=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.dataset.dir=dir;
+    b.textContent=glyph;
+    b.title=title;
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); panelMove(panel, delta); });
+    wrap.appendChild(b);
+  });
+  head.appendChild(wrap);
+});
+panelMoveRefresh();
+
 // Whole-panel fold: purely a view state, so playback keeps running while
 // collapsed -- handy when performing on the Solo Pad or tweaking the rack
 // and the grid is just taking up screen.
