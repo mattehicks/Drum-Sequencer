@@ -516,7 +516,8 @@ canvas{
   display:flex;
   align-items:center;
   gap:6px;
-  max-width:100%;
+  width:100%;              /* one standard box width for every row: the full label column */
+  box-sizing:border-box;
   /* Clickable box: selects this row as the active instrument for the
      tap-in recorder and the note keyboard. */
   border:1px solid rgba(255,255,255,0.16);
