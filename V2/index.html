@@ -1871,6 +1871,7 @@ canvas{
             <option value="reso">Resonance</option>
             <option value="vibrato">Vibrato</option>
           </select></div>
+          <div class="lab-row"><label for="soloLevel">Volume</label><input type="range" id="soloLevel" min="0" max="1" step="0.01" value="0.8"><output>80%</output></div>
           <div class="lab-row"><label for="soloWave">Wave</label><select id="soloWave"><option value="sawtooth" selected>Saw</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="sine">Sine</option></select></div>
           <div class="lab-row"><label for="soloBase">Base</label><input type="range" id="soloBase" min="55" max="440" step="1" value="110"><output>110 Hz</output></div>
           <div class="lab-row"><label for="soloOct">Range</label><input type="range" id="soloOct" min="1" max="4" step="1" value="3"><output>3 oct</output></div>
@@ -6033,7 +6034,7 @@ async function labEnsureAudioRunning(){
 // it feel like an instrument instead of a stepped controller: pitch slides,
 // volume swells, and the gate is just an amplitude envelope -- the osc never
 // stops/starts mid-performance, so there are no clicks and no note-on lag.
-const soloCfg={wave:'sawtooth', base:110, octaves:3, glide:0.03, snap:false, mapX:'volume', mapY:'pitch'};
+const soloCfg={wave:'sawtooth', base:110, octaves:3, glide:0.03, snap:false, mapX:'volume', mapY:'pitch', level:0.8};
 let soloOsc=null, soloGainNode=null;
 let soloShiftHeld=false, soloPointerDown=false, soloHover=false;
 let soloPos={x:0.75, y:0.5}; // normalized, y measured from the top
@@ -6058,8 +6059,10 @@ function soloFreq(){
   return soloCfg.base*Math.pow(2, semis/12);
 }
 function soloVol(){
+  // The Volume slider scales this everywhere (see soloApply); unmapped, the
+  // axis contribution is unity so the slider alone sets the level.
   const t=soloAxisT('volume');
-  if(t==null) return 0.8;
+  if(t==null) return 1.0;
   // Perceptual taper: linear finger travel maps to a curve so the quiet
   // half of the pad isn't wasted on near-silence.
   return Math.pow(t, 1.6);
@@ -6100,7 +6103,7 @@ function soloUpdateUI(){
   const parts=[];
   const desc=(param)=>{
     if(param==='pitch'){ const f=soloFreq(); return freqToNoteName(f)+' \u00b7 '+f.toFixed(1)+' Hz'; }
-    if(param==='volume') return 'vol '+Math.round(soloVol()*100)+'%';
+    if(param==='volume') return 'vol '+Math.round(soloVol()*soloCfg.level*100)+'%';
     if(param==='cutoff'){ const c=soloCutoff(); return 'cutoff '+(c>=1000 ? (c/1000).toFixed(1)+' kHz' : Math.round(c)+' Hz'); }
     if(param==='reso') return 'Q '+soloReso().toFixed(1);
     if(param==='vibrato') return 'vib '+Math.round(soloVibrato())+' ct';
@@ -6148,7 +6151,7 @@ function soloApply(){
   soloFilter.frequency.setTargetAtTime(soloCutoff(), now, 0.015);
   soloFilter.Q.setTargetAtTime(soloReso(), now, 0.02);
   soloLfoGain.gain.setTargetAtTime(soloVibrato(), now, 0.03);
-  const target=soloGated() ? soloVol() : 0;
+  const target=soloGated() ? soloVol()*soloCfg.level : 0;
   // Fast-but-not-instant gain chase: ~10ms feels immediate and never clicks.
   soloGainNode.gain.setTargetAtTime(target, now, soloGated() ? 0.01 : 0.03);
 }
@@ -6212,7 +6215,7 @@ window.addEventListener('blur', ()=>{ soloShiftHeld=false; soloPointerDown=false
   });
 });
 document.getElementById('soloWave').addEventListener('change', (e)=>{ soloCfg.wave=e.target.value; soloApply(); });
-[['soloBase','base', v=>v+' Hz'], ['soloOct','octaves', v=>v+' oct'], ['soloGlide','glide', v=>Math.round(v*1000)+' ms']].forEach(([id,key,fmt])=>{
+[['soloLevel','level', v=>Math.round(v*100)+'%'], ['soloBase','base', v=>v+' Hz'], ['soloOct','octaves', v=>v+' oct'], ['soloGlide','glide', v=>Math.round(v*1000)+' ms']].forEach(([id,key,fmt])=>{
   const el=document.getElementById(id);
   const out=el.closest('.lab-row').querySelector('output');
   el.addEventListener('input', ()=>{
