@@ -1,0 +1,9 @@
+{
+  "app": "node bin/app.mjs",
+  "context": {
+    "domainName": "d20drums.com",
+    "hostedZoneId": "Z06340083DOH212LEY52U",
+    "subdomain": "studio",
+    "secretParam": "/d20studio/session-secret"
+  }
+}

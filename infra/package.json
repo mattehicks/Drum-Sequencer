@@ -1,0 +1,20 @@
+{
+  "name": "d20-studio-infra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AWS CDK stack for studio.d20drums.com (S3 + CloudFront + HTTP API + Lambda + DynamoDB).",
+  "scripts": {
+    "synth": "cdk synth",
+    "deploy": "node ../server/scripts/build.mjs && node scripts/ensure-secret.mjs && cdk deploy --require-approval never",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.200.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.1000.0"
+  }
+}
