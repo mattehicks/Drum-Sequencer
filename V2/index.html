@@ -7648,6 +7648,14 @@ loadProjectInput.addEventListener('change', ()=>{
   reader.readAsText(file);
 });
 
+/* ---------- cloud hook ---------- */
+// Exposes project save/load to the optional server-side cloud UI (server/public/cloud.js).
+// No effect when the page is opened as a local file.
+window.D20App={
+  collect: ()=>collectProjectState(),
+  load: (data)=>{ seqSaveFileHandle=null; applyProjectState(data); }
+};
+
 /* ---------- import instruments ---------- */
 // Loads just the synth/instrument side of a file -- accepts a full project
 // export (format:'d20-synth-project', pulling its .voices) or a standalone
