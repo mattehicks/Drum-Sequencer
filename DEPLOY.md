@@ -1,5 +1,48 @@
 # Deploying the D20 Synth Workbench
 
+Two supported targets:
+
+- **AWS serverless (live at https://studio.d20drums.com)** — below.
+- **Docker on a single VPS** — see [Docker / VPS](#docker--vps).
+
+## AWS serverless
+
+```
+studio.d20drums.com  Route 53 alias (zone d20drums.com, Z06340083DOH212LEY52U) → CloudFront
+  /*      → S3 site bucket (private, OAC)      build/site
+  /api/*  → API Gateway HTTP API → Lambda      build/lambda  (Node 22, arm64)
+                                    ├─ DynamoDB table (users, project metadata, share slugs)
+                                    └─ S3 data bucket (project JSON, versioned, 30-day old-version expiry)
+```
+
+Stack `D20Studio`, account 021891588256, region us-east-1 (defined in `infra/lib/studio-stack.mjs`, settings in `infra/cdk.json`). Session secret: SSM SecureString `/d20studio/session-secret`, created on first deploy by `infra/scripts/ensure-secret.mjs`. The table and data bucket are retained if the stack is destroyed.
+
+Deploy / redeploy (after any change to `V2/`, `browser/`, `server/`):
+
+```bash
+cd server && npm install --include=dev
+cd ../infra && npm install --include=dev
+npm run deploy        # builds build/site + build/lambda, ensures the secret, cdk deploy, invalidates CloudFront
+```
+
+`NODE_ENV=production` is set in this machine's environment, so `--include=dev` is needed for the build tools.
+
+Verify:
+
+```bash
+cd server
+BASE=https://studio.d20drums.com npm test     # creates two throwaway @example.com users
+node test/lambda-v2.mjs                        # local check of the Lambda adapter
+```
+
+Differences from the Docker build: project size limit 5 MB (Lambda payload limit), and the login rate limiter is per Lambda instance. API Gateway stage throttling is 25 req/s, burst 50.
+
+Logs: CloudWatch log group for `D20Studio-ApiFn…` (30-day retention).
+
+---
+
+## Docker / VPS
+
 Stack: one Linux host running Docker Compose with two containers.
 
 | Container | Role |
