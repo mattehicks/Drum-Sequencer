@@ -321,34 +321,12 @@ canvas{
   border-radius:8px;
   padding:14px 16px 16px;
 }
-/* Collapse zone: a slim strip across the very top of the sequencer panel,
-   closed off by a faint grey line. Clicking anywhere in the strip (the area
-   above the line) folds the whole panel down to just this strip; clicking
-   again reopens it. */
-.seq-collapse-zone{
-  margin:-14px -16px 12px;      /* span edge to edge above the panel padding */
-  padding:5px 0 6px;
-  border-bottom:1px solid rgba(255,255,255,0.13); /* the faint grey line */
-  border-radius:8px 8px 0 0;
-  cursor:pointer;
-  user-select:none;
-  text-align:center;
-  color:transparent;            /* label only shows on hover / when collapsed */
-  font-size:10px;
-  letter-spacing:0.14em;
-  text-transform:uppercase;
-  line-height:1;
-}
-.seq-collapse-zone:hover{
-  border-bottom-color:rgba(255,255,255,0.3);
-  color:var(--muted,#8f8b86);
-}
-.sequencer.seq-collapsed .seq-collapse-zone{
-  margin-bottom:-16px;          /* swallow the panel's bottom padding too */
-  border-bottom:none;
-  color:var(--muted,#8f8b86);
-}
-.sequencer.seq-collapsed > *:not(.seq-collapse-zone){display:none;}
+/* Title bar: same as the other panels' heads -- chevron + white uppercase
+   label on the left (clicking it folds the whole panel), movers on the right. */
+.seq-title-head{display:flex; align-items:center; margin-bottom:14px;}
+.seq-title-head .analysis-toggle{flex:1; text-align:left;}
+.sequencer.seq-collapsed .seq-title-head{margin-bottom:0;}
+.sequencer.seq-collapsed > *:not(.seq-title-head){display:none;}
 .seq-head{
   display:flex;
   flex-wrap:wrap;
@@ -1669,7 +1647,11 @@ canvas{
   </section>
 
   <section class="sequencer" id="sequencer">
-    <div class="seq-collapse-zone" id="seqCollapseZone" title="Click to collapse / expand the sequencer">&#9652; collapse</div>
+    <div class="seq-title-head">
+      <button type="button" class="analysis-toggle" id="seqPanelToggle" aria-expanded="true" aria-controls="sequencer">
+        <span class="chevron">&#9656;</span> Sequencer
+      </button>
+    </div>
     <div class="seq-head">
       <button id="seqPlayBtn" class="seq-play" type="button">&#9654; Play</button>
       <label class="seq-tempo">Tempo
@@ -5228,7 +5210,7 @@ function panelMove(panel, dir){
 PANEL_MOVE_IDS.forEach(id=>{
   const panel=document.getElementById(id);
   if(!panel) return;
-  const head=panel.querySelector('.analysis-head, .rack-head, .patterns-head, .seq-head');
+  const head=panel.querySelector('.analysis-head, .rack-head, .patterns-head, .seq-title-head');
   if(!head) return;
   const wrap=document.createElement('span');
   wrap.className='panel-move';
@@ -5264,12 +5246,12 @@ panelMoveRefresh();
 // Whole-panel fold: purely a view state, so playback keeps running while
 // collapsed -- handy when performing on the Solo Pad or tweaking the rack
 // and the grid is just taking up screen.
-const seqCollapseZone=document.getElementById('seqCollapseZone');
+const seqPanelToggle=document.getElementById('seqPanelToggle');
 let seqPanelCollapsed=false;
-seqCollapseZone.addEventListener('click', ()=>{
+seqPanelToggle.addEventListener('click', ()=>{
   seqPanelCollapsed=!seqPanelCollapsed;
   sequencerEl.classList.toggle('seq-collapsed', seqPanelCollapsed);
-  seqCollapseZone.innerHTML=seqPanelCollapsed ? '&#9662; sequencer' : '&#9652; collapse';
+  seqPanelToggle.setAttribute('aria-expanded', String(!seqPanelCollapsed));
 });
 
 const seqBarsToggleBtn=document.getElementById('seqBarsToggleBtn');
