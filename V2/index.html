@@ -110,19 +110,15 @@ body{
 }
 .master{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
 .file-ctrl{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-/* Save confirmation: appears beside Save Project for a few seconds after
-   every save, including the silent in-place overwrites. */
-.save-status{
-  font-family:var(--mono);
-  font-size:11.5px;
+/* Save confirmation, no text: the Save Project button flashes accent after
+   every save (including the silent in-place overwrites). */
+#saveProjectBtn{transition:box-shadow 400ms, border-color 400ms, color 400ms;}
+#saveProjectBtn.saved{
+  border-color:var(--accent);
   color:var(--accent);
-  white-space:nowrap;
-  opacity:0;
-  transition:opacity 250ms;
+  box-shadow:0 0 0 1px var(--accent), 0 0 12px rgba(var(--accent-rgb),0.55);
+  transition:none;
 }
-.save-status:empty{display:none;}
-.save-status.show{opacity:1;}
-.save-status.err{color:#e0706a;}
 /* Export Audio popup: centered modal, filename + format, big record toggle. */
 #exportOverlay{
   position:fixed; inset:0;
@@ -1652,7 +1648,6 @@ canvas{
     <div class="file-ctrl">
       <button id="newProjectBtn" class="file-btn" type="button" title="Clear the sequencer, instrument tweaks, and text patterns back to a blank starter project">New Project</button>
       <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
-      <span class="save-status" id="saveStatus" role="status" aria-live="polite"></span>
       <button id="loadProjectBtn" class="file-btn" type="button">Load Project</button>
       <input type="file" id="loadProjectInput" accept="application/json,.json" hidden>
       <button id="importInstrumentsBtn" class="file-btn" type="button" title="Load just the instrument/synth settings from a project or instruments file, without touching the sequencer">Import Instruments</button>
@@ -7243,18 +7238,12 @@ function collectProjectState(){
 // file doesn't silently get clobbered by a save meant for a different one.
 let seqSaveFileHandle=null;
 
-const saveStatusEl=document.getElementById('saveStatus');
-let saveStatusTimer=null;
-function saveIndicate(msg, isErr){
-  const t=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  saveStatusEl.textContent=(isErr ? '✗ ' : '✓ ')+msg+' · '+t;
-  saveStatusEl.classList.toggle('err', !!isErr);
-  saveStatusEl.classList.add('show');
-  clearTimeout(saveStatusTimer);
-  saveStatusTimer=setTimeout(()=>{
-    saveStatusEl.classList.remove('show');
-    saveStatusTimer=setTimeout(()=>{ saveStatusEl.textContent=''; }, 260);
-  }, 4000);
+const saveProjectBtnEl=document.getElementById('saveProjectBtn');
+let saveFlashTimer=null;
+function saveIndicate(){
+  saveProjectBtnEl.classList.add('saved');
+  clearTimeout(saveFlashTimer);
+  saveFlashTimer=setTimeout(()=>saveProjectBtnEl.classList.remove('saved'), 900);
 }
 
 async function saveProject(){
@@ -7284,7 +7273,7 @@ async function saveProject(){
       const writable=await seqSaveFileHandle.createWritable();
       await writable.write(json);
       await writable.close();
-      saveIndicate('Saved to '+seqSaveFileHandle.name);
+      saveIndicate();
       return;
     }catch(err){
       if(err && err.name==='AbortError') return; // user dismissed the picker -- not an error
@@ -7302,7 +7291,7 @@ async function saveProject(){
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  saveIndicate('Downloaded '+filename);
+  saveIndicate();
 }
 
 document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
