@@ -110,15 +110,19 @@ body{
 }
 .master{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
 .file-ctrl{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-/* Save confirmation, no text: the Save Project button flashes accent after
+/* Save confirmation: a checkmark beside Save Project, shown briefly after
    every save (including the silent in-place overwrites). */
-#saveProjectBtn{transition:box-shadow 400ms, border-color 400ms, color 400ms;}
-#saveProjectBtn.saved{
-  border-color:var(--accent);
+.save-check{
+  font-size:18px;
+  font-weight:700;
+  line-height:1;
   color:var(--accent);
-  box-shadow:0 0 0 1px var(--accent), 0 0 12px rgba(var(--accent-rgb),0.55);
-  transition:none;
+  margin-left:-2px;
+  opacity:0;
+  transition:opacity 600ms;
+  pointer-events:none;
 }
+.save-check.show{opacity:1; transition:opacity 120ms;}
 /* Export Audio popup: centered modal, filename + format, big record toggle. */
 #exportOverlay{
   position:fixed; inset:0;
@@ -1648,6 +1652,7 @@ canvas{
     <div class="file-ctrl">
       <button id="newProjectBtn" class="file-btn" type="button" title="Clear the sequencer, instrument tweaks, and text patterns back to a blank starter project">New Project</button>
       <button id="saveProjectBtn" class="file-btn" type="button">Save Project</button>
+      <span class="save-check" id="saveCheck" aria-hidden="true">&#10003;</span>
       <button id="loadProjectBtn" class="file-btn" type="button">Load Project</button>
       <input type="file" id="loadProjectInput" accept="application/json,.json" hidden>
       <button id="importInstrumentsBtn" class="file-btn" type="button" title="Load just the instrument/synth settings from a project or instruments file, without touching the sequencer">Import Instruments</button>
@@ -7238,12 +7243,12 @@ function collectProjectState(){
 // file doesn't silently get clobbered by a save meant for a different one.
 let seqSaveFileHandle=null;
 
-const saveProjectBtnEl=document.getElementById('saveProjectBtn');
-let saveFlashTimer=null;
+const saveCheckEl=document.getElementById('saveCheck');
+let saveCheckTimer=null;
 function saveIndicate(){
-  saveProjectBtnEl.classList.add('saved');
-  clearTimeout(saveFlashTimer);
-  saveFlashTimer=setTimeout(()=>saveProjectBtnEl.classList.remove('saved'), 900);
+  saveCheckEl.classList.add('show');
+  clearTimeout(saveCheckTimer);
+  saveCheckTimer=setTimeout(()=>saveCheckEl.classList.remove('show'), 1500);
 }
 
 async function saveProject(){
