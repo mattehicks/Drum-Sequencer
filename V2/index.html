@@ -1476,6 +1476,40 @@ canvas{
   box-shadow:0 10px 28px rgba(0,0,0,0.45);
 }
 .context-menu[hidden]{display:none;}
+
+/* ---- Library sidebar: folder-backed Instruments and Songs lists ---- */
+.lib{
+  position:fixed; top:0; left:0; bottom:0; width:230px;
+  display:flex; flex-direction:column;
+  background:var(--panel); border-right:1px solid var(--border);
+  z-index:50; font-family:var(--mono); font-size:12px; color:var(--text);
+  user-select:none;
+}
+body .app{margin-left:230px;}
+body.lib-collapsed .app{margin-left:24px;}
+body.lib-collapsed .lib{width:24px;}
+body.lib-collapsed .lib-pane{display:none;}
+body.lib-collapsed .lib-toggle{transform:rotate(180deg);}
+.lib-toggle{
+  align-self:flex-end; background:none; border:none; color:var(--subtext);
+  font-size:11px; padding:6px 7px; cursor:pointer;
+}
+.lib-toggle:hover{color:var(--accent);}
+.lib-pane{flex:1; min-height:0; display:flex; flex-direction:column; border-top:1px solid var(--border);}
+.lib-head{display:flex; align-items:center; gap:6px; padding:8px 8px 2px;}
+.lib-title{flex:1; font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:11px;}
+.lib-btn{
+  background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+  font-family:var(--mono); font-size:11px; border-radius:5px; padding:2px 7px; cursor:pointer;
+}
+.lib-btn:hover{border-color:var(--accent); color:var(--accent);}
+.lib-dir{padding:0 8px 6px; font-size:10.5px; color:var(--subtext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.lib-list{flex:1; overflow:auto; padding:0 4px 8px;}
+.lib-file,.lib-item{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-radius:4px; cursor:pointer;}
+.lib-file{padding:3px 6px; margin-top:4px;}
+.lib-item{padding:2px 6px 2px 20px; color:var(--subtext);}
+.lib-file:hover,.lib-item:hover{background:var(--panel-2); color:var(--accent);}
+.lib-kids[hidden]{display:none;}
 .context-menu-item{
   display:block;
   width:100%;
@@ -1599,6 +1633,20 @@ canvas{
 }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<aside class="lib" id="lib">
+  <button type="button" class="lib-toggle" id="libToggle" title="Show/hide library">&#9664;</button>
+  <div class="lib-pane">
+    <div class="lib-head"><span class="lib-title">Instruments</span><button type="button" class="lib-btn" id="libInstPick">Folder</button><button type="button" class="lib-btn" id="libInstRefresh" title="Re-read folder">&#8635;</button></div>
+    <div class="lib-dir" id="libInstDir"></div>
+    <div class="lib-list" id="libInstList"></div>
+  </div>
+  <div class="lib-pane">
+    <div class="lib-head"><span class="lib-title">Songs</span><button type="button" class="lib-btn" id="libSongsPick">Folder</button><button type="button" class="lib-btn" id="libSongsRefresh" title="Re-read folder">&#8635;</button></div>
+    <div class="lib-dir" id="libSongsDir"></div>
+    <div class="lib-list" id="libSongsList"></div>
+  </div>
+</aside>
 
 <div class="app">
   <header class="topbar">
@@ -7279,6 +7327,7 @@ async function saveProject(){
       await writable.write(json);
       await writable.close();
       saveIndicate();
+      libAfterSave();
       return;
     }catch(err){
       if(err && err.name==='AbortError') return; // user dismissed the picker -- not an error
@@ -7661,6 +7710,249 @@ loadProjectInput.addEventListener('change', ()=>{
   reader.onerror=()=>{ showHint('Could not read that file.'); };
   reader.readAsText(file);
 });
+
+/* ---------- library sidebar ---------- */
+// Two folder-backed lists. Songs: project files (format d20-synth-project),
+// each with its tracks. Instruments: the voices inside project files and
+// standalone instrument files ({voices:[...]} or a bare array). A folder is
+// read when picked, on refresh, and after a Save that lands inside it.
+const lib={songs:{dir:null, files:[]}, inst:{dir:null, files:[]}};
+
+async function libScan(kind){
+  const pane=lib[kind];
+  pane.files=[];
+  if(pane.dir){
+    for await (const h of pane.dir.values()){
+      if(h.kind!=='file' || !/\.json$/i.test(h.name)) continue;
+      let data;
+      try{ data=JSON.parse(await (await h.getFile()).text()); }catch(err){ continue; }
+      if(kind==='songs'){
+        if(data && data.format==='d20-synth-project') pane.files.push({handle:h, data});
+      }else{
+        const voices=Array.isArray(data) ? data : (data && Array.isArray(data.voices) ? data.voices : null);
+        if(voices && voices.length) pane.files.push({handle:h, data, voices});
+      }
+    }
+    pane.files.sort((a,b)=> a.handle.name.localeCompare(b.handle.name));
+  }
+  libRender(kind);
+}
+
+async function libPick(kind){
+  if(!window.showDirectoryPicker){ alert('This browser cannot open folders. Use Chrome or Edge.'); return; }
+  try{ lib[kind].dir=await window.showDirectoryPicker({id:'d20lib'+kind, mode:'read'}); }
+  catch(err){ return; }
+  libScan(kind);
+}
+
+async function libAfterSave(){
+  if(!seqSaveFileHandle) return;
+  for(const kind of ['songs','inst']){
+    const d=lib[kind].dir;
+    if(!d) continue;
+    try{ if(await d.resolve(seqSaveFileHandle)) libScan(kind); }catch(err){}
+  }
+}
+
+function libFileLabel(f){
+  return (f.data && !Array.isArray(f.data) && f.data.name) || f.handle.name.replace(/\.json$/i,'');
+}
+
+function libVoiceName(id, fileVoices){
+  const v=(fileVoices||[]).find(x=>x && x.id===id) || VOICES.find(x=>x.id===id) || VOICE_DEFAULTS[id];
+  return v ? v.name : id;
+}
+
+// Returns the id of a rack voice for saved descriptor sv, creating it if
+// needed. reuse=true (track imports): a voice already in the rack with the
+// same id is used as is. reuse=false (instrument adds): always a new entry.
+function libEnsureVoice(sv, fileVoices, reuse){
+  if(!sv || !sv.id) return null;
+  if(reuse && VOICES.some(v=>v.id===sv.id)) return sv.id;
+  const saved=reuse ? sv : {...sv, id:undefined};
+  let voice;
+  if(!sv.isClone && sv.sampleData && sv.sampleData.pcm){
+    voice=makeSampleVoice(sv.sampleData, saved);
+    try{ labBuffers[voice.id]=recDecodePCM16(sv.sampleData.pcm, sv.sampleData.sr||44100); }
+    catch(err){ console.warn('Sample decode failed for', voice.id, err); }
+  }else if(!sv.isClone && sv.soloPatch){
+    voice=makeSoloPatchVoice(sv.soloPatch, saved);
+  }else if(!sv.isClone && sv.labParams){
+    voice=makeLabVoice(sv.labParams, saved);
+  }else{
+    // Stock voice or clone: built as a clone of whichever rack voice
+    // carries the synthesis function.
+    const baseId=sv.isClone ? sv.clonedFrom : sv.id;
+    let base=VOICES.find(v=>v.id===baseId);
+    if(!base && sv.isClone){
+      const up=(fileVoices||[]).find(x=>x && x.id===baseId);
+      if(up) base=VOICES.find(v=>v.id===libEnsureVoice(up, fileVoices, true));
+    }
+    if(!base) return null;
+    let id=sv.id;
+    if(VOICES.some(v=>v.id===id)){
+      const stem=base.id.replace(/\d+$/,'');
+      let n=2;
+      while(VOICES.some(v=>v.id===stem+n)) n++;
+      id=stem+n;
+    }
+    voice={
+      id, key:'', name:sv.name||base.name,
+      trigger:base.trigger, theory:base.theory,
+      params:base.params.map(q=>({...q})),
+      isClone:true, clonedFrom:base.id
+    };
+  }
+  VOICES.push(voice);
+  if(sv.params) state.voices[voice.id]={...sv.params};
+  else{ const o={}; voice.params.forEach(q=>{ o[q.id]=q.value; }); state.voices[voice.id]=o; }
+  if(voice.labParams) labQueueRender(voice);
+  return voice.id;
+}
+
+// Builds a live sequencer row from track i of a song file. Linked rows fit
+// to the current bar count (padded or cut); unlinked rows keep their own.
+function libBuildRow(f, i){
+  const s=f.data.sequencer||{};
+  const r=s.rows[i];
+  const fileVoices=Array.isArray(f.data.voices) ? f.data.voices : [];
+  const mapVoice=(vid)=>{
+    const sv=fileVoices.find(x=>x && x.id===vid);
+    const id=sv ? libEnsureVoice(sv, fileVoices, true) : vid;
+    return VOICES.some(v=>v.id===id) ? id : null;
+  };
+  const row={id:seqNewRowId(), voiceId:mapVoice(r.voiceId) || VOICES[0].id};
+  if(r.unlinked && Array.isArray(r.groupSlots) && r.groupSlots.length){
+    row.unlinked=true;
+    row.groupSlots=r.groupSlots.slice();
+    row.mode=(r.mode==='sync') ? 'sync' : 'loop';
+  }
+  if(typeof r.volume==='number') row.volume=Math.min(100, Math.max(0, Math.round(r.volume)));
+  if(r.muted) row.muted=true;
+  if(r.solo) row.solo=true;
+  if(r.perf==='A' || r.perf==='B') row.perf=r.perf;
+  const n=rowSteps(row);
+  const fit=(arr, fill)=>{ const a=Array.isArray(arr) ? arr.slice(0, n) : []; while(a.length<n) a.push(fill); return a; };
+  seq.pattern[row.id]=fit(s.pattern && s.pattern[r.id], false);
+  seq.velocity[row.id]=fit(s.velocity && s.velocity[r.id], 100);
+  const cv=s.cellVoice && s.cellVoice[r.id];
+  if(cv && typeof cv==='object'){
+    const m={};
+    for(const k in cv){ const c=+k; const id=mapVoice(cv[k]); if(c>=0 && c<n && id) m[c]=id; }
+    if(Object.keys(m).length) seq.cellVoice[row.id]=m;
+  }
+  const cn=s.cellNote && s.cellNote[r.id];
+  if(cn && typeof cn==='object'){
+    const m={};
+    for(const k in cn){ const c=+k; const fq=+cn[k]; if(c>=0 && c<n && isFinite(fq) && fq>0) m[c]=fq; }
+    if(Object.keys(m).length) seq.cellNote[row.id]=m;
+  }
+  return row;
+}
+
+function libImportTrack(f, i, overwrite){
+  const row=libBuildRow(f, i);
+  if(overwrite && i<seq.rows.length){
+    const old=seq.rows[i];
+    delete seq.pattern[old.id];
+    delete seq.velocity[old.id];
+    delete seq.cellVoice[old.id];
+    delete seq.cellNote[old.id];
+    delete seqSyncRuntime[old.id];
+    delete seqRowHighlight[old.id];
+    if(seqActiveCell && seqActiveCell.rowId===old.id) seqActiveCell=null;
+    seq.rows[i]=row;
+  }else{
+    seq.rows.push(row);
+  }
+  renderVoices();
+  renderSequencer();
+}
+
+function libMergeSong(f){
+  const rows=(f.data.sequencer && f.data.sequencer.rows) || [];
+  rows.forEach((_, i)=> seq.rows.push(libBuildRow(f, i)));
+  renderVoices();
+  renderSequencer();
+}
+
+function libLoadSong(f){
+  applyProjectState(f.data);
+  seqSaveFileHandle=f.handle; // Save writes back to this file
+}
+
+function libAddInstruments(f, list){
+  list.forEach(sv=> libEnsureVoice(sv, f.voices, false));
+  renderVoices();
+  setRackExpanded(true);
+}
+
+function libMenu(el, items){
+  el.addEventListener('contextmenu', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    openContextMenu(e.clientX, e.clientY, items);
+  });
+}
+
+function libRender(kind){
+  const pane=lib[kind];
+  const songs=kind==='songs';
+  const list=document.getElementById(songs ? 'libSongsList' : 'libInstList');
+  document.getElementById(songs ? 'libSongsDir' : 'libInstDir').textContent=pane.dir ? pane.dir.name : '';
+  list.innerHTML='';
+  pane.files.forEach(f=>{
+    const head=document.createElement('div');
+    head.className='lib-file';
+    head.textContent=libFileLabel(f);
+    head.title=f.handle.name;
+    const kids=document.createElement('div');
+    kids.className='lib-kids';
+    head.addEventListener('click', ()=>{ kids.hidden=!kids.hidden; });
+    if(songs){
+      head.addEventListener('dblclick', ()=>{ kids.hidden=false; libLoadSong(f); });
+      libMenu(head, [
+        {label:'Load (overwrite song)', onSelect:()=> libLoadSong(f)},
+        {label:'Merge (add all tracks below)', onSelect:()=> libMergeSong(f)}
+      ]);
+      const rows=(f.data.sequencer && Array.isArray(f.data.sequencer.rows)) ? f.data.sequencer.rows : [];
+      rows.forEach((r, i)=>{
+        const it=document.createElement('div');
+        it.className='lib-item';
+        it.textContent=(i+1)+'. '+libVoiceName(r.voiceId, f.data.voices);
+        libMenu(it, [
+          {label:'Load (overwrite track '+(i+1)+')', onSelect:()=> libImportTrack(f, i, true)},
+          {label:'Merge (add as new track)', onSelect:()=> libImportTrack(f, i, false)}
+        ]);
+        kids.appendChild(it);
+      });
+    }else{
+      head.addEventListener('dblclick', ()=>{ kids.hidden=false; });
+      libMenu(head, [{label:'Add all to Instruments', onSelect:()=> libAddInstruments(f, f.voices)}]);
+      f.voices.forEach(sv=>{
+        if(!sv || !sv.id) return;
+        const it=document.createElement('div');
+        it.className='lib-item';
+        it.textContent=sv.name || sv.id;
+        it.addEventListener('dblclick', ()=> libAddInstruments(f, [sv]));
+        libMenu(it, [{label:'Add to Instruments', onSelect:()=> libAddInstruments(f, [sv])}]);
+        kids.appendChild(it);
+      });
+    }
+    list.appendChild(head);
+    list.appendChild(kids);
+  });
+}
+
+document.getElementById('libSongsPick').addEventListener('click', ()=> libPick('songs'));
+document.getElementById('libInstPick').addEventListener('click', ()=> libPick('inst'));
+document.getElementById('libSongsRefresh').addEventListener('click', ()=> libScan('songs'));
+document.getElementById('libInstRefresh').addEventListener('click', ()=> libScan('inst'));
+document.getElementById('libToggle').addEventListener('click', ()=>{
+  document.body.classList.toggle('lib-collapsed');
+  renderSequencer();
+});
+if(window.innerWidth<700) document.body.classList.add('lib-collapsed');
 
 /* ---------- cloud hook ---------- */
 // Exposes project save/load to the optional server-side cloud UI (server/public/cloud.js).
