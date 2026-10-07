@@ -1481,13 +1481,20 @@ canvas{
 .lib{
   position:fixed; top:0; left:0; bottom:0; width:230px;
   display:flex; flex-direction:column;
-  background:var(--panel); border-right:1px solid var(--border);
+  background:var(--panel);
   z-index:50; font-family:var(--mono); font-size:12px; color:var(--text);
   user-select:none;
 }
 body .app{margin-left:230px;}
 body.lib-collapsed .app{margin-left:24px;}
-body.lib-collapsed .lib{width:24px;}
+body.lib-collapsed .lib{width:24px; cursor:pointer;}
+body.lib-collapsed .lib:hover{background:var(--panel-2);}
+/* Borders fade out toward their ends instead of running edge to edge. */
+.lib::after{
+  content:''; position:absolute; top:0; right:0; bottom:0; width:1px;
+  background:linear-gradient(to bottom, transparent, var(--border) 15%, var(--border) 85%, transparent);
+  pointer-events:none;
+}
 body.lib-collapsed .lib-pane{display:none;}
 body.lib-collapsed .lib-toggle{transform:rotate(180deg);}
 .lib-toggle{
@@ -1495,7 +1502,11 @@ body.lib-collapsed .lib-toggle{transform:rotate(180deg);}
   font-size:11px; padding:6px 7px; cursor:pointer;
 }
 .lib-toggle:hover{color:var(--accent);}
-.lib-pane{flex:1; min-height:0; display:flex; flex-direction:column; border-top:1px solid var(--border);}
+.lib-pane{flex:1; min-height:0; display:flex; flex-direction:column; position:relative;}
+.lib-pane::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+}
 .lib-head{display:flex; align-items:center; gap:6px; padding:8px 8px 2px;}
 .lib-title{flex:1; font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:11px;}
 .lib-btn{
@@ -7948,9 +7959,17 @@ document.getElementById('libSongsPick').addEventListener('click', ()=> libPick('
 document.getElementById('libInstPick').addEventListener('click', ()=> libPick('inst'));
 document.getElementById('libSongsRefresh').addEventListener('click', ()=> libScan('songs'));
 document.getElementById('libInstRefresh').addEventListener('click', ()=> libScan('inst'));
-document.getElementById('libToggle').addEventListener('click', ()=>{
-  document.body.classList.toggle('lib-collapsed');
+function libSetCollapsed(c){
+  document.body.classList.toggle('lib-collapsed', c);
   renderSequencer();
+}
+document.getElementById('libToggle').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  libSetCollapsed(!document.body.classList.contains('lib-collapsed'));
+});
+// Collapsed: the whole strip is the expand target.
+document.getElementById('lib').addEventListener('click', ()=>{
+  if(document.body.classList.contains('lib-collapsed')) libSetCollapsed(false);
 });
 if(window.innerWidth<700) document.body.classList.add('lib-collapsed');
 
