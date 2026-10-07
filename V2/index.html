@@ -7971,7 +7971,7 @@ document.getElementById('libToggle').addEventListener('click', (e)=>{
 document.getElementById('lib').addEventListener('click', ()=>{
   if(document.body.classList.contains('lib-collapsed')) libSetCollapsed(false);
 });
-if(window.innerWidth<700) document.body.classList.add('lib-collapsed');
+document.body.classList.add('lib-collapsed'); // closed by default
 
 /* ---------- cloud hook ---------- */
 // Exposes project save/load to the optional server-side cloud UI (server/public/cloud.js).
